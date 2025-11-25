@@ -34,8 +34,9 @@ proget-docker-cleaner/
 │   ├── __init__.py                  # Package initialization
 │   └── proget.py                    # ProGet API interactions and business logic
 ├── docs/                            # Documentation
+│   ├── ARCHITECTURE.md              # Project architectural decisions, design 
 │   ├── IMPLEMENTATION_PLAN.md       # Detailed implementation plan with phases
-│   └── PROGET_URLS.md              # ProGet API endpoints documentation
+│   └── PROGET_URLS.md               # ProGet API endpoints documentation
 ├── tests/                           # Comprehensive test suite
 │   ├── conftest.py                  # Shared pytest fixtures
 │   ├── integration/                 # Integration tests (live ProGet)
@@ -181,15 +182,15 @@ This will scan all repositories and generate a report showing:
 
 ## Command Line Arguments
 
-| Flag                | Short | Required | Description                                       |
-| ------------------- | ----- | -------- | ------------------------------------------------- |
-| `--host <url>`      |       | Yes      | Base ProGet URL, e.g. `https://proget.mysite.com` |
-| `--username <user>` |       | Yes      | ProGet username                                   |
-| `--password <pass>` |       | Yes      | ProGet password                                   |
-| `--dry-run`         |       | No       | Simulate actions without deletion                 |
+| Flag                | Short | Required | Description                                              |
+| ------------------- | ----- | -------- | -------------------------------------------------------- |
+| `--host <url>`      | `-h`  | Yes      | Base ProGet URL, e.g. `https://proget.mysite.com`        |
+| `--username <user>` | `-u`  | Yes      | ProGet username                                          |
+| `--password <pass>` | `-p`  | Yes      | ProGet password                                          |
+| `--dry-run`         | `-d`  | No       | Simulate actions without deletion                        |
 | `--yes`             | `-y`  | No       | Auto-confirm deletion without prompting (default: False) |
-| `--repo <name>`     |       | No       | Only clean one specific repository                |
-| `--concurrency <n>` |       | No       | Clean multiple repos concurrently (default: 1)    |
+| `--repo <name>`     | `-r`  | No       | Only clean one specific repository                       |
+| `--concurrency <n>` | `-c`  | No       | Clean multiple repos concurrently (default: 1)           |
 
 ## Testing
 
@@ -266,7 +267,7 @@ The tool uses Playwright to interact with ProGet's web interface since ProGet do
 - ⚠️ Use `--yes` flag carefully - it skips confirmation prompts
 - ⚠️ Avoid using high concurrency if your ProGet server is small
 - ⚠️ The tool only targets untagged images - tagged images are safe
-- ⚠️ Images with `delete-` prefix tags are considered untagged
+- ⚠️ Images with `delete-` prefix tags are considered untagged and to be deleted
 
 ## Development
 
