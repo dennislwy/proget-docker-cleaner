@@ -16,6 +16,12 @@ async def main():
     parser.add_argument(
         "--dry-run", action="store_true", help="Run without making actual deletions"
     )
+    parser.add_argument(
+        "-y",
+        "--yes",
+        action="store_true",
+        help="Automatically confirm deletion without prompting (default: False)",
+    )
 
     args = parser.parse_args()
 

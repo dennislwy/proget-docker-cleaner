@@ -18,7 +18,7 @@ def test_parse_repositories_html_with_single_repo():
     html_content = """
     <html>
     <body>
-        <a href="/containers/repositories/docker/payment-service/images">payment-service</a>
+        <a href="/containers/tags/docker/payment-service/latest/overview">payment-service:latest</a>
     </body>
     </html>
     """
@@ -35,9 +35,9 @@ def test_parse_repositories_html_with_multiple_repos():
     html_content = """
     <html>
     <body>
-        <a href="/containers/repositories/docker/payment-service/images">payment-service</a>
-        <a href="/containers/repositories/docker/user-service/images">user-service</a>
-        <a href="/containers/repositories/docker/api-gateway/images">api-gateway</a>
+        <a href="/containers/tags/docker/payment-service/latest/overview">payment-service:latest</a>
+        <a href="/containers/tags/docker/user-service/v1.0/overview">user-service:v1.0</a>
+        <a href="/containers/tags/docker/api-gateway/dev/overview">api-gateway:dev</a>
     </body>
     </html>
     """
@@ -56,9 +56,9 @@ def test_parse_repositories_html_sorted_by_name():
     html_content = """
     <html>
     <body>
-        <a href="/containers/repositories/docker/zebra-service/images">zebra-service</a>
-        <a href="/containers/repositories/docker/alpha-service/images">alpha-service</a>
-        <a href="/containers/repositories/docker/beta-service/images">beta-service</a>
+        <a href="/containers/tags/docker/zebra-service/latest/overview">zebra-service:latest</a>
+        <a href="/containers/tags/docker/alpha-service/v1/overview">alpha-service:v1</a>
+        <a href="/containers/tags/docker/beta-service/dev/overview">beta-service:dev</a>
     </body>
     </html>
     """
@@ -76,9 +76,9 @@ def test_parse_repositories_html_with_duplicates():
     html_content = """
     <html>
     <body>
-        <a href="/containers/repositories/docker/payment-service/images">payment-service</a>
-        <a href="/containers/repositories/docker/payment-service/images">payment-service</a>
-        <a href="/containers/repositories/docker/user-service/images">user-service</a>
+        <a href="/containers/tags/docker/payment-service/latest/overview">payment-service:latest</a>
+        <a href="/containers/tags/docker/payment-service/v1.0/overview">payment-service:v1.0</a>
+        <a href="/containers/tags/docker/user-service/latest/overview">user-service:latest</a>
     </body>
     </html>
     """
@@ -111,9 +111,9 @@ def test_parse_repositories_html_different_feed():
     html_content = """
     <html>
     <body>
-        <a href="/containers/repositories/docker/service1/images">service1</a>
-        <a href="/containers/repositories/npm/package1/images">package1</a>
-        <a href="/containers/repositories/docker/service2/images">service2</a>
+        <a href="/containers/tags/docker/service1/latest/overview">service1:latest</a>
+        <a href="/containers/tags/npm/package1/v1/overview">package1:v1</a>
+        <a href="/containers/tags/docker/service2/dev/overview">service2:dev</a>
     </body>
     </html>
     """
@@ -133,9 +133,9 @@ def test_parse_repositories_html_with_special_characters():
     html_content = """
     <html>
     <body>
-        <a href="/containers/repositories/docker/my-service-123/images">my-service-123</a>
-        <a href="/containers/repositories/docker/api_gateway/images">api_gateway</a>
-        <a href="/containers/repositories/docker/service.v2/images">service.v2</a>
+        <a href="/containers/tags/docker/my-service-123/latest/overview">my-service-123:latest</a>
+        <a href="/containers/tags/docker/api_gateway/v1/overview">api_gateway:v1</a>
+        <a href="/containers/tags/docker/service.v2/dev/overview">service.v2:dev</a>
     </body>
     </html>
     """
@@ -149,20 +149,41 @@ def test_parse_repositories_html_with_special_characters():
     assert "service.v2" in repo_names
 
 
-def test_parse_repositories_html_ignores_non_image_links():
-    """Test that non-image repository links are ignored."""
+def test_parse_repositories_html_ignores_non_overview_links():
+    """Test that non-overview repository links are ignored."""
     html_content = """
     <html>
     <body>
-        <a href="/containers/repositories/docker/payment-service/images">payment-service</a>
-        <a href="/containers/repositories/docker/user-service">user-service</a>
-        <a href="/containers/repositories/docker/api-gateway/settings">api-gateway</a>
+        <a href="/containers/tags/docker/payment-service/latest/overview">payment-service:latest</a>
+        <a href="/containers/tags/docker/user-service/v1/settings">user-service:v1</a>
+        <a href="/containers/registry?feedId=docker">registry</a>
     </body>
     </html>
     """
 
     repositories = parse_repositories_html(html_content, feed="docker")
 
-    # Should only match the link ending with /images
+    # Should only match the link ending with /overview
     assert len(repositories) == 1
     assert repositories[0].name == "payment-service"
+
+
+def test_parse_repositories_html_with_gsf_feed():
+    """Test parsing repositories from gsf feed (real ProGet format)."""
+    html_content = """
+    <html>
+    <body>
+        <a href="/containers/tags/gsf/gsf-aspnetcore-authentication/1.1.2408.3012/overview">gsf-aspnetcore-authentication:1.1.2408.3012</a>
+        <a href="/containers/tags/gsf/gsf-aspnetcore-authentication/latest/overview">gsf-aspnetcore-authentication:latest</a>
+        <a href="/containers/tags/gsf/gsf-central-core/dev/overview">gsf-central-core:dev</a>
+        <a href="/containers/tags/gsf/gsf-central-core/latest/overview">gsf-central-core:latest</a>
+    </body>
+    </html>
+    """
+
+    repositories = parse_repositories_html(html_content, feed="gsf")
+
+    assert len(repositories) == 2
+    repo_names = [r.name for r in repositories]
+    assert "gsf-aspnetcore-authentication" in repo_names
+    assert "gsf-central-core" in repo_names

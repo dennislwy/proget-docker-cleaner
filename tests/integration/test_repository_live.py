@@ -19,11 +19,11 @@ async def test_get_repositories_from_live_proget(proget_test_credentials):
         password=proget_test_credentials["password"],
     )
 
-    # Fetch repositories
+    # Fetch repositories (using "gsf" feed for test instance)
     repositories = await get_repositories(
         page=page,
         host=proget_test_credentials["host"],
-        feed="docker",
+        feed="gsf",
     )
 
     # Verify we got some repositories
@@ -34,7 +34,7 @@ async def test_get_repositories_from_live_proget(proget_test_credentials):
     for repo in repositories:
         assert hasattr(repo, "feed")
         assert hasattr(repo, "name")
-        assert repo.feed == "docker"
+        assert repo.feed == "gsf"
         assert len(repo.name) > 0
 
     print(f"Found {len(repositories)} repositories")
@@ -60,11 +60,11 @@ async def test_get_repositories_with_filter(proget_test_credentials):
         password=proget_test_credentials["password"],
     )
 
-    # Get all repositories first
+    # Get all repositories first (using "gsf" feed for test instance)
     all_repos = await get_repositories(
         page=page,
         host=proget_test_credentials["host"],
-        feed="docker",
+        feed="gsf",
     )
 
     # If there are repositories, test filtering
@@ -76,7 +76,7 @@ async def test_get_repositories_with_filter(proget_test_credentials):
         filtered_repos = await get_repositories(
             page=page,
             host=proget_test_credentials["host"],
-            feed="docker",
+            feed="gsf",
             repo_filter=first_repo_name,
         )
 
@@ -107,11 +107,11 @@ async def test_get_repositories_returns_sorted_list(proget_test_credentials):
         password=proget_test_credentials["password"],
     )
 
-    # Fetch repositories
+    # Fetch repositories (using "gsf" feed for test instance)
     repositories = await get_repositories(
         page=page,
         host=proget_test_credentials["host"],
-        feed="docker",
+        feed="gsf",
     )
 
     # Verify repositories are sorted
@@ -139,11 +139,11 @@ async def test_get_repositories_with_nonexistent_filter(proget_test_credentials)
         password=proget_test_credentials["password"],
     )
 
-    # Fetch with non-existent filter
+    # Fetch with non-existent filter (using "gsf" feed for test instance)
     repositories = await get_repositories(
         page=page,
         host=proget_test_credentials["host"],
-        feed="docker",
+        feed="gsf",
         repo_filter="non-existent-repo-xyz-123",
     )
 
