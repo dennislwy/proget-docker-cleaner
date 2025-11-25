@@ -26,6 +26,8 @@ Supports **dry-run**, **single-repo**, and authenticated access.
 
 ```
 proget-docker-cleaner/
+├── core/                            # Core application functionality
+│   └── proget.py                    # ProGet utilities and API interactions
 ├── docs/                            # Documentation
 ├── tests/                           # Test suite
 ├── proget-docker-cleaner.py         # Main CLI tool
