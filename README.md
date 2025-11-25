@@ -22,6 +22,19 @@ Supports **dry-run**, **single-repo**, and authenticated access.
 - 🧭 Optional repo filtering (--repo)
 - ⚙️ Clean and easy-to-extend Python codebase
 
+## Project Structure
+
+```
+proget-docker-cleaner/
+├── docs/                            # Documentation
+├── tests/                           # Test suite
+├── proget-docker-cleaner.py         # Main CLI tool
+├── pyproject.toml                   # Project dependencies and metadata
+├── README.md                        # This file
+├── uv.lock                          # Dependency lock file
+└── .gitignore                       # Git ignore patterns
+```
+
 ## Installation
 
 Clone the repo:
