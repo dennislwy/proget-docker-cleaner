@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import time
 
 from core.proget import (
     login_to_proget,
@@ -14,17 +15,17 @@ async def main():
         description="Clean up untagged Docker images from ProGet registry"
     )
     parser.add_argument(
-        "--host", required=True, help="ProGet host URL (e.g., https://proget.mysite.com)"
+        "-s", "--host", required=True, help="ProGet host URL (e.g., https://proget.mysite.com)"
     )
-    parser.add_argument("--username", required=True, help="ProGet username")
-    parser.add_argument("--password", required=True, help="ProGet password")
-    parser.add_argument(
+    parser.add_argument("-u", "--username", required=True, help="ProGet username")
+    parser.add_argument("-p", "--password", required=True, help="ProGet password")
+    parser.add_argument("-f",
         "--feed", default="docker", help="Container feed name (default: docker)"
     )
-    parser.add_argument(
+    parser.add_argument("-r",
         "--repo", help="Optional: specific repository to clean (default: all repositories)"
     )
-    parser.add_argument(
+    parser.add_argument("-dr",
         "--dry-run", action="store_true", help="Run without making actual deletions"
     )
     parser.add_argument(
@@ -35,6 +36,9 @@ async def main():
     )
 
     args = parser.parse_args()
+
+    # Start timing
+    start_time = time.time()
 
     try:
         print("=" * 80)
@@ -138,6 +142,16 @@ async def main():
 
         if args.dry_run:
             print("\n[DRY RUN] No actual changes were made")
+
+        # Calculate and display elapsed time
+        elapsed_time = time.time() - start_time
+        minutes = int(elapsed_time // 60)
+        seconds = int(elapsed_time % 60)
+
+        if minutes > 0:
+            print(f"\nTotal elapsed time:       {minutes}min {seconds}sec")
+        else:
+            print(f"\nTotal elapsed time:       {seconds}sec")
 
         print("=" * 80)
 
