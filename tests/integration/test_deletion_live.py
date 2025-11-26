@@ -9,9 +9,8 @@ from core.proget import (
     login_to_proget,
     get_repositories,
     get_images,
-    tag_image,
     delete_image,
-    delete_tagged_images,
+    delete_untagged_images,
 )
 
 
@@ -77,8 +76,8 @@ async def test_delete_image_dry_run(proget_test_credentials):
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_delete_tagged_images_dry_run(proget_test_credentials):
-    """Test deleting all delete-tagged images in dry-run mode on live ProGet.
+async def test_delete_untagged_images_dry_run(proget_test_credentials):
+    """Test deleting all untagged images in dry-run mode on live ProGet.
 
     Args:
         proget_test_credentials: Fixture providing test credentials
@@ -109,8 +108,8 @@ async def test_delete_tagged_images_dry_run(proget_test_credentials):
         repo=repo.name,
     )
 
-    # Delete all untagged/delete-tagged images in dry-run mode
-    stats = await delete_tagged_images(
+    # Delete all untagged images in dry-run mode
+    stats = await delete_untagged_images(
         page=page,
         host=proget_test_credentials["host"],
         feed=repo.feed,
@@ -120,12 +119,12 @@ async def test_delete_tagged_images_dry_run(proget_test_credentials):
     )
 
     # Verify statistics
-    assert stats["total"] >= 0, "Should have count of delete-tagged images"
+    assert stats["total"] >= 0, "Should have count of untagged images"
     if stats["total"] > 0:
         assert stats["deleted"] == stats["total"], "All should be deleted (dry-run)"
         assert stats["failed"] == 0, "No failures in dry-run"
 
-    print(f"[DRY RUN] Would delete {stats['total']} delete-tagged images in {repo.full_name}")
+    print(f"[DRY RUN] Would delete {stats['total']} untagged images in {repo.full_name}")
 
     # Clean up
     await page.close()
@@ -134,13 +133,13 @@ async def test_delete_tagged_images_dry_run(proget_test_credentials):
 @pytest.mark.asyncio
 @pytest.mark.integration
 @pytest.mark.skip(reason="Skipped by default - modifies live ProGet data")
-async def test_tag_and_delete_single_image_live(proget_test_credentials):
-    """Test tagging and then deleting a single image on live ProGet.
+async def test_delete_single_image_live(proget_test_credentials):
+    """Test deleting a single untagged image on live ProGet.
 
     This test is SKIPPED by default to avoid modifying live data.
     Remove @pytest.mark.skip to run this test.
 
-    WARNING: This will tag and delete an untagged image.
+    WARNING: This will delete an untagged image.
 
     Args:
         proget_test_credentials: Fixture providing test credentials
@@ -171,33 +170,19 @@ async def test_tag_and_delete_single_image_live(proget_test_credentials):
         repo=repo.name,
     )
 
-    # Find an untagged image (not delete-tagged yet)
+    # Find an untagged image
     test_image = None
     for img in images:
-        if len(img.tags) == 0:  # Completely untagged
+        if img.is_untagged:
             test_image = img
             break
 
     if test_image is None:
-        print("No completely untagged images found - skipping test")
+        print("No untagged images found - skipping test")
         await page.close()
         return
 
-    # Step 1: Tag the image with delete-test-deletion
-    print(f"Tagging {repo.full_name}@{test_image.digest} as delete-test-deletion")
-    tag_result = await tag_image(
-        page=page,
-        host=proget_test_credentials["host"],
-        feed=repo.feed,
-        repo=repo.name,
-        digest=test_image.digest,
-        tag="delete-test-deletion",
-        dry_run=False,
-    )
-
-    assert tag_result is True, "Tagging should succeed"
-
-    # Step 2: Delete the tagged image
+    # Delete the untagged image
     print(f"Deleting {repo.full_name}@{test_image.digest}")
     delete_result = await delete_image(
         page=page,
@@ -210,7 +195,7 @@ async def test_tag_and_delete_single_image_live(proget_test_credentials):
 
     assert delete_result is True, "Deletion should succeed"
 
-    # Step 3: Verify the image is gone by fetching images again
+    # Verify the image is gone by fetching images again
     images_after = await get_images(
         page=page,
         host=proget_test_credentials["host"],

@@ -5,8 +5,7 @@ from core.proget import (
     login_to_proget,
     get_repositories,
     get_images,
-    tag_untagged_images,
-    delete_tagged_images,
+    delete_untagged_images,
 )
 
 
@@ -46,11 +45,11 @@ async def main():
             print("=" * 80)
 
         # Phase 1: Authentication
-        print("\n[Phase 1/5] Authenticating to ProGet...")
+        print("\n[Phase 1/4] Authenticating to ProGet...")
         page = await login_to_proget(args.host, args.username, args.password)
 
         # Phase 2: Repository Discovery
-        print("\n[Phase 2/5] Discovering repositories...")
+        print("\n[Phase 2/4] Discovering repositories...")
         repositories = await get_repositories(
             page=page,
             host=args.host,
@@ -70,9 +69,7 @@ async def main():
             "repos_processed": 0,
             "total_images": 0,
             "untagged_images": 0,
-            "tagged_images": 0,
             "deleted_images": 0,
-            "failed_tags": 0,
             "failed_deletes": 0,
         }
 
@@ -83,7 +80,7 @@ async def main():
             print("=" * 80)
 
             # Phase 3: Image Enumeration
-            print(f"\n[Phase 3/5] Fetching images from {repo.full_name}...")
+            print(f"\n[Phase 3/4] Fetching images from {repo.full_name}...")
             images = await get_images(
                 page=page,
                 host=args.host,
@@ -107,29 +104,15 @@ async def main():
             # Confirmation prompt (unless --yes flag is set or dry-run)
             if not args.yes and not args.dry_run:
                 response = input(
-                    f"\nTag and delete {untagged_count} untagged images in {repo.full_name}? [y/N]: "
+                    f"\nDelete {untagged_count} untagged images in {repo.full_name}? [y/N]: "
                 )
                 if response.lower() != "y":
                     print("Skipped by user")
                     continue
 
-            # Phase 4: Image Tagging
-            print(f"\n[Phase 4/5] Tagging {untagged_count} untagged images...")
-            tag_stats = await tag_untagged_images(
-                page=page,
-                host=args.host,
-                feed=repo.feed,
-                repo=repo.name,
-                images=images,
-                dry_run=args.dry_run,
-            )
-
-            total_stats["tagged_images"] += tag_stats["tagged"]
-            total_stats["failed_tags"] += tag_stats["failed"]
-
-            # Phase 5: Image Deletion
-            print(f"\n[Phase 5/5] Deleting {tag_stats['tagged']} tagged images...")
-            delete_stats = await delete_tagged_images(
+            # Phase 4: Image Deletion (directly delete untagged images)
+            print(f"\n[Phase 4/4] Deleting {untagged_count} untagged images...")
+            delete_stats = await delete_untagged_images(
                 page=page,
                 host=args.host,
                 feed=repo.feed,
@@ -149,10 +132,8 @@ async def main():
         print(f"Repositories processed:   {total_stats['repos_processed']}/{len(repositories)}")
         print(f"Total images scanned:     {total_stats['total_images']}")
         print(f"Untagged images found:    {total_stats['untagged_images']}")
-        print(f"Images tagged:            {total_stats['tagged_images']}")
         print(f"Images deleted:           {total_stats['deleted_images']}")
-        if total_stats["failed_tags"] > 0 or total_stats["failed_deletes"] > 0:
-            print(f"Failed to tag:            {total_stats['failed_tags']}")
+        if total_stats["failed_deletes"] > 0:
             print(f"Failed to delete:         {total_stats['failed_deletes']}")
 
         if args.dry_run:

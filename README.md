@@ -8,9 +8,8 @@ This tool:
 2. Retrieves all repository names
 3. Fetches all images (tagged + untagged) for each repository
 4. Identifies untagged images
-5. Tags untagged images using delete-{counter}
-6. Deletes those tagged images
-7. Repeats the process for each repository or a specific repo
+5. Deletes untagged images directly using Docker Registry V2 API
+6. Repeats the process for each repository or a specific repo
 
 Supports **dry-run**, **single-repo**, **auto-confirmation**, and authenticated access.
 
@@ -18,12 +17,11 @@ Supports **dry-run**, **single-repo**, **auto-confirmation**, and authenticated 
 - 🔐 Authenticates using ProGet username + password
 - 📦 Retrieves all repositories automatically
 - 🔍 Identifies untagged images (94.1% of images in typical ProGet installations!)
-- 🏷️ Tags untagged images for safe deletion
-- 🗑️ Deletes tagged images using the ProGet Docker API
+- 🗑️ Deletes untagged images directly using Docker Registry V2 API
 - 🧪 Dry-run mode for safe simulation
 - ✅ Auto-confirmation mode (`-y`/`--yes`) for automated scripts
 - 🧭 Optional repo filtering (`--repo`)
-- ⚡ Concurrent processing support
+- ⚡ Concurrent processing support (planned)
 - ⚙️ Clean and easy-to-extend Python codebase
 
 ## Project Structure
@@ -44,16 +42,14 @@ proget-docker-cleaner/
 │   │   ├── test_authentication_live.py
 │   │   ├── test_deletion_live.py
 │   │   ├── test_image_live.py
-│   │   ├── test_repository_live.py
-│   │   └── test_tagging_live.py
+│   │   └── test_repository_live.py
 │   └── unit/                        # Unit tests
 │       ├── __init__.py
 │       ├── test_authentication.py
 │       ├── test_cli.py
 │       ├── test_deletion.py
 │       ├── test_image.py
-│       ├── test_repository.py
-│       └── test_tagging.py
+│       └── test_repository.py
 ├── analyze_repos.py                 # Analysis script to scan all repositories
 ├── proget-docker-cleaner.py         # Main CLI tool
 ├── pyproject.toml                   # Project dependencies and metadata
@@ -86,25 +82,17 @@ proget-docker-cleaner/
 - ✅ DockerImage dataclass with `is_untagged` property
 - ✅ Test coverage: 18 tests (14 unit + 4 integration)
 
-**Phase 4: Image Tagging Operations**
-- ✅ Tag individual images using Docker Registry V2 API
-- ✅ Batch tagging of untagged images with delete-{counter}
-- ✅ Extract full digest (sha256:...) from short digest
-- ✅ GET manifest and PUT to new tag
-- ✅ Dry-run mode support
-- ✅ Error handling and detailed logging
-- ✅ Test coverage: 16 tests (14 unit + 2 integration)
-
-**Phase 5: Image Deletion Operations**
+**Phase 4: Image Deletion Operations**
 - ✅ Delete individual images using Docker Registry V2 API
-- ✅ Batch deletion of delete-tagged images
-- ✅ Extract full digest and DELETE manifest
+- ✅ Batch deletion of untagged images (directly by digest)
+- ✅ Extract full digest (sha256:...) from short digest
+- ✅ DELETE manifest by digest (no tagging required)
 - ✅ Dry-run mode support
 - ✅ Deletion statistics tracking
 - ✅ Error handling and detailed logging
 - ✅ Test coverage: 15 tests (13 unit + 2 integration)
 
-**Total Test Coverage**: 77 tests, 100% code coverage
+**Total Test Coverage**: 62 tests, 100% code coverage
 
 ### 📋 Planned Phases
 
@@ -266,9 +254,8 @@ The tool uses Playwright to interact with ProGet's web interface and Docker Regi
 1. **Authentication Module** (`core/proget.py:13-62`): Handles login and session management
 2. **Repository Discovery** (`core/proget.py:84-152`): Fetches and parses repository list
 3. **Image Enumeration** (`core/proget.py:185-289`): Identifies tagged and untagged images
-4. **Image Tagging** (`core/proget.py:292-438`): Tags images using Docker Registry V2 API
-5. **Image Deletion** (`core/proget.py:441-568`): Deletes images using Docker Registry V2 API
-6. **Data Models**:
+4. **Image Deletion** (`core/proget.py:292-420`): Deletes images directly using Docker Registry V2 API
+5. **Data Models**:
    - `Repository` dataclass for repository metadata
    - `DockerImage` dataclass for image data with `is_untagged` property
 
@@ -313,6 +300,6 @@ MIT License - See LICENSE file for details
 
 - Built with async Python patterns for performance
 - Tested against live ProGet instances
-- Comprehensive test coverage (77 tests, 100% coverage)
+- Comprehensive test coverage (62 tests, 100% coverage)
 - Follows Google Style Python docstrings
 - Uses Docker Registry V2 API for image operations
