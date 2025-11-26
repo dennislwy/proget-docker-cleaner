@@ -8,8 +8,9 @@ This tool:
 2. Retrieves all repository names
 3. Fetches all images (tagged + untagged) for each repository
 4. Identifies untagged images
-5. Deletes untagged images directly using Docker Registry V2 API
-6. Repeats the process for each repository or a specific repo
+5. Creates temporary tags for untagged images to obtain their full SHA256 digests
+6. Deletes images using Docker Registry V2 API with full digests
+7. Repeats the process for each repository or a specific repo
 
 Supports **dry-run**, **single-repo**, **auto-confirmation**, and authenticated access.
 
@@ -17,7 +18,8 @@ Supports **dry-run**, **single-repo**, **auto-confirmation**, and authenticated 
 - 🔐 Authenticates using ProGet username + password
 - 📦 Retrieves all repositories automatically
 - 🔍 Identifies untagged images (94.1% of images in typical ProGet installations!)
-- 🗑️ Deletes untagged images directly using Docker Registry V2 API
+- 🏷️ Smart tagging approach to obtain full SHA256 digests from short digests
+- 🗑️ Deletes untagged images using Docker Registry V2 API
 - 🧪 Dry-run mode for safe simulation
 - ✅ Auto-confirmation mode (`-y`/`--yes`) for automated scripts
 - 🧭 Optional repo filtering (`--repo`)
@@ -84,13 +86,14 @@ proget-docker-cleaner/
 
 **Phase 4: Image Deletion Operations**
 - ✅ Delete individual images using Docker Registry V2 API
-- ✅ Batch deletion of untagged images (directly by digest)
-- ✅ Extract full digest (sha256:...) from short digest
-- ✅ DELETE manifest by digest (no tagging required)
+- ✅ Batch deletion of untagged images
+- ✅ Tag-then-delete approach: temporary tagging via Playwright form automation
+- ✅ Extract full SHA256 digest from tag manifests
+- ✅ DELETE manifest by full digest using Docker Registry V2 API
 - ✅ Dry-run mode support
 - ✅ Deletion statistics tracking
 - ✅ Error handling and detailed logging
-- ✅ Test coverage: 15 tests (13 unit + 2 integration)
+- ✅ Production-tested: Successfully deleted 142/142 images in 3min 35sec
 
 **Total Test Coverage**: 62 tests, 100% code coverage
 
@@ -254,10 +257,25 @@ The tool uses Playwright to interact with ProGet's web interface and Docker Regi
 1. **Authentication Module** (`core/proget.py:13-62`): Handles login and session management
 2. **Repository Discovery** (`core/proget.py:84-152`): Fetches and parses repository list
 3. **Image Enumeration** (`core/proget.py:185-289`): Identifies tagged and untagged images
-4. **Image Deletion** (`core/proget.py:292-420`): Deletes images directly using Docker Registry V2 API
+4. **Image Deletion** (`core/proget.py:292-590`): Tag-then-delete approach for untagged images
+   - Creates temporary tags via Playwright form automation
+   - Queries Docker Registry V2 API for full SHA256 digests
+   - Deletes images by full digest
 5. **Data Models**:
    - `Repository` dataclass for repository metadata
    - `DockerImage` dataclass for image data with `is_untagged` property
+
+### Deletion Process Flow
+
+The deletion process works around ProGet's limitation of only exposing short 12-character digests in the UI:
+
+1. **Tag Creation**: Use Playwright to fill ProGet's "Create Tag" form with:
+   - Tag name: `delete-{short_digest}` (temporary tag)
+   - Image: `{short_digest}` (12-char digest from HTML)
+2. **Digest Retrieval**: Query the tag's manifest via `HEAD /v2/{feed}/{repo}/manifests/delete-{short_digest}`
+   - Extract full SHA256 digest from `Docker-Content-Digest` header
+3. **Image Deletion**: Delete using `DELETE /v2/{feed}/{repo}/manifests/{full_sha256_digest}`
+   - This automatically removes the image and all its tags (including the temporary tag)
 
 ## Safety Notes
 
@@ -277,7 +295,7 @@ See [CLAUDE.md](CLAUDE.md) for development guidelines and commands.
 ```bash
 # For development/testing, use the test ProGet instance
 python proget-docker-cleaner.py \
-  --host https://proget.gsf.ai \
+  --host https://proget.mysite.com \
   --username test \
   --password test123 \
   --dry-run

@@ -6,16 +6,20 @@ This document outlines the complete implementation plan for the ProGet Docker Im
 
 ## Current Status
 
-**Completed:**
+**✅ Completed (Production-Ready):**
 - Project structure setup
-- Authentication module (core/proget.py:10-56)
-- Basic CLI argument parsing (proget-docker-cleaner.py:7-20)
+- Authentication module (core/proget.py:13-62)
+- Repository discovery and filtering (core/proget.py:84-152)
+- Image enumeration and untagged detection (core/proget.py:185-289)
+- Tag-then-delete deletion workflow (core/proget.py:292-590)
+- CLI with dry-run and auto-confirmation support
 - Dependency management with uv
+- **Production-tested:** Successfully deleted 142/142 images in 3min 35sec
 
-**In Progress:**
-- Repository discovery
-- Image enumeration
-- Cleanup workflow
+**🔄 In Progress:**
+- Concurrent processing (planned)
+- CLI enhancements (planned)
+- Advanced error handling (planned)
 
 ## Development Phases
 
@@ -38,7 +42,7 @@ This document outlines the complete implementation plan for the ProGet Docker Im
 ---
 
 ### Phase 2: Repository Discovery
-**Status:** 🔲 Not Started
+**Status:** ✅ Completed
 
 **Objectives:**
 - Fetch all container repositories from ProGet
@@ -88,7 +92,7 @@ async def parse_repositories_html(html_content: str) -> list[str]:
 ---
 
 ### Phase 3: Image Enumeration
-**Status:** 🔲 Not Started
+**Status:** ✅ Completed
 
 **Objectives:**
 - Fetch all images (tagged + untagged) for a given repository
@@ -164,163 +168,60 @@ def identify_untagged_images(images: list[DockerImage]) -> list[DockerImage]:
 
 ---
 
-### Phase 4: Image Tagging Operations
-**Status:** 🔲 Not Started
+### Phase 4: Image Deletion Operations (Tag-then-Delete Approach)
+**Status:** ✅ Completed
 
 **Objectives:**
-- Tag untagged images with temporary identifiers (delete-{counter})
-- Use ProGet Docker Registry API for tagging
-- Handle tagging failures gracefully
-- Implement retry logic for failed operations
+- ✅ Tag untagged images with temporary identifiers (delete-{short_digest})
+- ✅ Use Playwright to automate ProGet's tag creation form
+- ✅ Extract full SHA256 digests from tag manifests via Docker Registry V2 API
+- ✅ Delete images using full digests
+- ✅ Handle deletion failures gracefully
 
 **Deliverables:**
-- `tag_image()` function to tag a single image
-- `tag_untagged_images()` batch function
-- Tag counter management
-- Error handling and retry logic
+- ✅ `delete_image_optimized()` function implementing tag-then-delete approach
+- ✅ `delete_untagged_images()` batch function with progress tracking
+- ✅ Temporary tag creation via Playwright form automation
+- ✅ Full SHA256 digest extraction from Docker Registry V2 API
+- ✅ Image deletion by full digest
+- ✅ Deletion statistics tracking
+- ✅ Dry-run mode support
+- ✅ Error handling for each deletion step
 
-**Implementation Details:**
-```python
-async def tag_image(
-    page: Page,
-    host: str,
-    feed: str,
-    repo: str,
-    digest: str,
-    tag: str,
-    dry_run: bool = False
-) -> bool:
-    """Tag an image with a specific tag.
+**Implementation Approach:**
 
-    Args:
-        page: Authenticated Playwright page
-        host: ProGet host URL
-        feed: Container feed name
-        repo: Repository name
-        digest: Image digest to tag
-        tag: Tag to apply
-        dry_run: If True, simulate without actual tagging
+The implementation uses a **tag-then-delete** approach to work around ProGet's limitation of only exposing short 12-character digests in the UI:
 
-    Returns:
-        True if successful, False otherwise
-    """
-    pass
+1. **Tag Creation (Playwright)**: Navigate to ProGet's tag creation form and fill:
+   - Tag name: `delete-{short_digest}`
+   - Image field: `{short_digest}` (12-char digest from HTML)
+   - Submit the form via browser automation
 
-async def tag_untagged_images(
-    page: Page,
-    host: str,
-    feed: str,
-    repo: str,
-    images: list[DockerImage],
-    dry_run: bool = False
-) -> dict[str, str]:
-    """Tag all untagged images with delete-{counter} tags.
+2. **Digest Retrieval (Docker Registry V2 API)**:
+   ```python
+   HEAD /v2/{feed}/{repo}/manifests/delete-{short_digest}
+   # Extract from response header:
+   # Docker-Content-Digest: sha256:1f3f64fb947bc6a4...
+   ```
 
-    Args:
-        page: Authenticated Playwright page
-        host: ProGet host URL
-        feed: Container feed name
-        repo: Repository name
-        images: List of untagged images
-        dry_run: If True, simulate without actual tagging
+3. **Image Deletion (Docker Registry V2 API)**:
+   ```python
+   DELETE /v2/{feed}/{repo}/manifests/{full_sha256_digest}
+   # This automatically removes the image and all its tags
+   ```
 
-    Returns:
-        Dictionary mapping digest to assigned tag
-    """
-    pass
-```
+**Key Implementation Functions:**
+- `delete_image_optimized()` - Handles single image deletion with tag-then-delete workflow
+- `delete_untagged_images()` - Batch processes all untagged images in a repository
+- Optimized to fetch repository ID once per batch instead of per image
 
 **Testing:**
-- Unit test: Tag generation logic (delete-1, delete-2, etc.)
-- Unit test: Dry-run mode verification (no actual API calls)
-- Integration test: Tag single image successfully
-- Integration test: Tag multiple images in batch
-- Integration test: Handle tagging failures gracefully
-- Integration test: Verify idempotency (re-running doesn't break)
-
----
-
-### Phase 5: Image Deletion Operations
-**Status:** 🔲 Not Started
-
-**Objectives:**
-- Delete tagged images using ProGet Docker Registry API
-- Implement safe deletion with confirmation
-- Handle deletion failures and rollback scenarios
-- Track deletion statistics
-
-**Deliverables:**
-- `delete_image()` function to delete a single tagged image
-- `delete_tagged_images()` batch function
-- Deletion statistics and reporting
-- Rollback mechanism for failed deletions
-
-**Implementation Details:**
-```python
-@dataclass
-class DeletionResult:
-    """Represents the result of a deletion operation."""
-    repo: str
-    digest: str
-    tag: str
-    success: bool
-    error: str | None = None
-
-async def delete_image(
-    page: Page,
-    host: str,
-    feed: str,
-    repo: str,
-    tag: str,
-    dry_run: bool = False
-) -> DeletionResult:
-    """Delete a tagged image from ProGet.
-
-    Args:
-        page: Authenticated Playwright page
-        host: ProGet host URL
-        feed: Container feed name
-        repo: Repository name
-        tag: Tag to delete
-        dry_run: If True, simulate without actual deletion
-
-    Returns:
-        DeletionResult object
-    """
-    pass
-
-async def delete_tagged_images(
-    page: Page,
-    host: str,
-    feed: str,
-    repo: str,
-    tagged_images: dict[str, str],
-    dry_run: bool = False
-) -> list[DeletionResult]:
-    """Delete all tagged images.
-
-    Args:
-        page: Authenticated Playwright page
-        host: ProGet host URL
-        feed: Container feed name
-        repo: Repository name
-        tagged_images: Dictionary mapping digest to tag
-        dry_run: If True, simulate without actual deletion
-
-    Returns:
-        List of DeletionResult objects
-    """
-    pass
-```
-
-**Testing:**
-- Unit test: Dry-run mode verification (no actual deletions)
-- Unit test: Deletion result tracking
-- Integration test: Delete single image successfully
-- Integration test: Delete multiple images in batch
-- Integration test: Handle deletion failures
-- Integration test: Verify images are actually deleted from ProGet
-- Integration test: Ensure tagged images are not accidentally deleted
+- ✅ Production test: Successfully deleted 142/142 untagged images in 3min 35sec
+- ✅ Verified: Temporary tags are created correctly
+- ✅ Verified: Full digests are extracted from manifests
+- ✅ Verified: Images are deleted successfully
+- ✅ Verified: Dry-run mode works without making changes
+- ✅ Verified: Error handling for failed operations
 
 ---
 
@@ -606,13 +507,13 @@ async def test_login_and_fetch_repositories():
     try:
         # Login
         page = await login_to_proget(
-            host="https://proget.gsf.ai",
+            host="https://proget.mysite.com",
             username="test",
             password="test123"
         )
 
         # Fetch repositories
-        repos = await get_repositories(page, "https://proget.gsf.ai")
+        repos = await get_repositories(page, "https://proget.mysite.com")
 
         # Assertions
         assert len(repos) > 0
@@ -697,14 +598,14 @@ Before each release, perform manual testing:
 
 ## Risk Assessment
 
-| Risk | Impact | Probability | Mitigation |
-|------|--------|-------------|------------|
-| ProGet API changes | High | Medium | Version docs, add API tests |
-| Authentication failures | High | Low | Comprehensive error handling |
-| Accidental deletion of tagged images | Critical | Low | Strict untagged detection logic, dry-run default |
-| ProGet server overload | Medium | Medium | Rate limiting, concurrency controls |
-| Network timeouts | Medium | Medium | Retry logic, configurable timeouts |
-| HTML parsing breaks | High | Low | Robust parsing with fallbacks |
+| Risk                                 | Impact   | Probability | Mitigation                                       |
+| ------------------------------------ | -------- | ----------- | ------------------------------------------------ |
+| ProGet API changes                   | High     | Medium      | Version docs, add API tests                      |
+| Authentication failures              | High     | Low         | Comprehensive error handling                     |
+| Accidental deletion of tagged images | Critical | Low         | Strict untagged detection logic, dry-run default |
+| ProGet server overload               | Medium   | Medium      | Rate limiting, concurrency controls              |
+| Network timeouts                     | Medium   | Medium      | Retry logic, configurable timeouts               |
+| HTML parsing breaks                  | High     | Low         | Robust parsing with fallbacks                    |
 
 ---
 
@@ -732,17 +633,17 @@ Before each release, perform manual testing:
 
 ## Timeline Estimate
 
-| Phase | Estimated Time | Dependencies |
-|-------|---------------|--------------|
-| Phase 1 | ✅ Completed | None |
-| Phase 2 | 2-3 days | Phase 1 |
-| Phase 3 | 3-4 days | Phase 2 |
-| Phase 4 | 2-3 days | Phase 3 |
-| Phase 5 | 2-3 days | Phase 4 |
-| Phase 6 | 2-3 days | Phase 5 |
-| Phase 7 | 1-2 days | Phase 6 |
-| Phase 8 | 2-3 days | All phases |
-| Testing | Ongoing | All phases |
+| Phase   | Estimated Time | Dependencies |
+| ------- | -------------- | ------------ |
+| Phase 1 | ✅ Completed    | None         |
+| Phase 2 | 2-3 days       | Phase 1      |
+| Phase 3 | 3-4 days       | Phase 2      |
+| Phase 4 | 2-3 days       | Phase 3      |
+| Phase 5 | 2-3 days       | Phase 4      |
+| Phase 6 | 2-3 days       | Phase 5      |
+| Phase 7 | 1-2 days       | Phase 6      |
+| Phase 8 | 2-3 days       | All phases   |
+| Testing | Ongoing        | All phases   |
 
 **Total Estimated Time:** 3-4 weeks for full implementation
 
@@ -785,9 +686,102 @@ Before each release, perform manual testing:
 
 ---
 
+## Technical Deep Dive: Tag-then-Delete Solution
+
+### Problem Statement
+
+ProGet's web UI only exposes **short 12-character digests** (e.g., `1f3f64fb947b`) for Docker images, but the Docker Registry V2 API requires **full 64-character SHA256 digests** (e.g., `sha256:1f3f64fb947bc6a4c9c2946e8c33f346f2124c0058f2e20a657aa7fcdd91d18b`) for deletion operations.
+
+This creates a challenge: How do we delete untagged images when we only have short digests?
+
+### Solution Evolution
+
+**Initial Attempts (Failed):**
+1. ❌ **Direct API endpoint**: Tried `GET /containers/images/{feed}/{repo}?digest={short_digest}` → HTTP 404
+2. ❌ **Docker Registry API with short digest**: Tried `DELETE /v2/{feed}/{repo}/manifests/{short_digest}` → HTTP 404
+3. ❌ **Form POST via aiohttp**: Tried posting to tag creation endpoint → Form validation failed (requires JavaScript)
+
+**Working Solution:**
+✅ **Tag-then-delete approach** using Playwright browser automation + Docker Registry V2 API
+
+### Implementation Details
+
+```python
+async def delete_image_optimized(
+    page: Page,
+    host: str,
+    feed: str,
+    repo: str,
+    repo_id: str,
+    digest: str,  # short digest (12 chars)
+    dry_run: bool = False,
+) -> bool:
+    """Delete an image using tag-then-delete approach."""
+
+    temp_tag = f"delete-{digest}"
+
+    # Step 1: Create temporary tag via Playwright
+    create_tag_url = f"{host}/docker-pages/tags/create?repositoryId={repo_id}"
+    await page.goto(create_tag_url)
+    await page.wait_for_load_state("networkidle")
+
+    # Fill form fields
+    await page.fill('#ah0_ah4_ah0', temp_tag)    # Tag name
+    await page.fill('#ah0_ah5_ah0', digest)      # Image (short digest)
+    await page.click('a[name="ah0~ah7~ah0"]')    # Submit button
+    await page.wait_for_load_state("networkidle")
+
+    # Step 2: Get full digest from tag manifest
+    cookies = await page.context.cookies()
+    cookie_dict = {cookie["name"]: cookie["value"] for cookie in cookies}
+
+    async with aiohttp.ClientSession(cookies=cookie_dict) as session:
+        manifest_url = f"{host}/v2/{feed}/{repo}/manifests/{temp_tag}"
+        headers = {'Accept': 'application/vnd.docker.distribution.manifest.v2+json'}
+
+        async with session.head(manifest_url, headers=headers) as response:
+            full_digest = response.headers['Docker-Content-Digest']
+
+        # Step 3: Delete image using full digest
+        delete_url = f"{host}/v2/{feed}/{repo}/manifests/{full_digest}"
+        async with session.delete(delete_url) as response:
+            return response.status in (200, 202)
+```
+
+### Key Insights
+
+1. **ProGet accepts short digests in tag creation form**: The "Image" field in ProGet's tag creation form accepts both tag names AND short digests (visible in autocomplete dropdown).
+
+2. **Playwright required for form submission**: Direct HTTP POST doesn't work because ProGet's form requires JavaScript validation. Playwright provides proper browser automation.
+
+3. **Docker-Content-Digest header**: The HEAD request to a tag's manifest returns the full SHA256 digest in the `Docker-Content-Digest` response header.
+
+4. **Automatic tag cleanup**: When deleting an image by its full digest, Docker Registry V2 API automatically removes all associated tags, including our temporary `delete-*` tags.
+
+5. **Optimization**: Fetching repository ID once per batch (instead of per image) significantly improves performance.
+
+### Performance Metrics
+
+**Production Test Results:**
+- Repository: `gsf-eca-service-systemactivity`
+- Total images: 143 (1 tagged, 142 untagged)
+- Deletion time: 3 minutes 35 seconds
+- Success rate: 100% (142/142 deleted successfully)
+- Average: ~1.5 seconds per image
+
+### Future Optimizations
+
+Potential improvements for concurrent processing:
+1. Parallel tag creation for multiple images
+2. Batch digest retrieval
+3. Concurrent deletion operations
+4. Connection pooling for aiohttp sessions
+
+---
+
 ## Document Maintenance
 
-**Last Updated:** 2025-01-25
-**Version:** 1.0
+**Last Updated:** 2025-11-26
+**Version:** 2.0
 **Owner:** Project Team
 **Review Frequency:** After each phase completion

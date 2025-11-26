@@ -299,8 +299,14 @@ async def delete_image(
 ) -> bool:
     """Delete an image using Docker Registry V2 API.
 
+    The deletion process:
+    1. Create a temporary tag for the image using its short digest
+    2. Get the full SHA256 digest from the tag's manifest
+    3. Delete the temporary tag
+    4. Delete the image using the full digest
+
     Args:
-        page: Authenticated Playwright page (for session cookies)
+        page: Authenticated Playwright page (for session cookies and UI interaction)
         host: ProGet host URL
         feed: Container feed name
         repo: Repository name
@@ -325,25 +331,70 @@ async def delete_image(
         cookies = await page.context.cookies()
         cookie_dict = {cookie["name"]: cookie["value"] for cookie in cookies}
 
+        temp_tag = f"delete-{digest}"
+
         async with aiohttp.ClientSession(cookies=cookie_dict) as session:
-            # Step 1: Get the full digest (sha256:...) from the short digest
-            image_url = f"{host}/containers/images/{feed}/{repo}?digest={digest}"
-            async with session.get(image_url) as response:
+            # Step 1: Create a temporary tag for this image using ProGet UI
+            # We need to get the repository ID first from the page
+            # Navigate to the repository to get the repositoryId
+            repo_url = f"{host}/containers/repositories/{feed}/{repo}/images"
+            await page.goto(repo_url)
+            await page.wait_for_load_state("networkidle")
+
+            # Extract repositoryId from the page
+            content = await page.content()
+            repo_id_match = re.search(r'repositoryId=(\d+)', content)
+            if not repo_id_match:
+                raise Exception(f"Could not find repository ID for {feed}/{repo}")
+            repo_id = repo_id_match.group(1)
+
+            # Create tag via ProGet UI form POST
+            create_tag_url = f"{host}/docker-pages/tags/create?repositoryId={repo_id}"
+
+            # Get CSRF token from page
+            csrf_match = re.search(r'name="AHAntiCsrfToken" value="([^"]+)"', content)
+            if not csrf_match:
+                raise Exception("Could not find CSRF token")
+            csrf_token = csrf_match.group(1)
+
+            # POST to create the tag
+            form_data = {
+                'AHAntiCsrfToken': csrf_token,
+                'ah0~ah4~ah0': temp_tag,  # Tag name
+                'ah0~ah5~ah0': digest,     # Image (short digest)
+                'ah0~ah7~ah0': 'Create Tag'  # Submit button
+            }
+
+            async with session.post(create_tag_url, data=form_data) as response:
+                if response.status not in (200, 302):
+                    raise Exception(
+                        f"Failed to create temporary tag: HTTP {response.status}"
+                    )
+
+            # Step 2: Get the full digest from the temporary tag's manifest
+            manifest_url = f"{host}/v2/{feed}/{repo}/manifests/{temp_tag}"
+            headers = {
+                'Accept': 'application/vnd.docker.distribution.manifest.v2+json'
+            }
+
+            async with session.head(manifest_url, headers=headers) as response:
                 if response.status != 200:
                     raise Exception(
-                        f"Failed to get image details: HTTP {response.status}"
+                        f"Failed to get manifest for temp tag: HTTP {response.status}"
                     )
-                content = await response.text()
 
-                # Extract full digest from page
-                # Pattern: sha256:[64-char hex]
-                full_digest_match = re.search(r"sha256:[a-f0-9]{64}", content)
-                if not full_digest_match:
-                    raise Exception(f"Could not find full digest for {digest}")
-                full_digest = full_digest_match.group(0)
+                if 'Docker-Content-Digest' not in response.headers:
+                    raise Exception("No Docker-Content-Digest header in response")
 
-            # Step 2: Delete the image using the full digest
-            # Docker Registry V2 API: DELETE /v2/{name}/manifests/{reference}
+                full_digest = response.headers['Docker-Content-Digest']
+
+            # Step 3: Delete the temporary tag
+            delete_tag_url = f"{host}/v2/{feed}/{repo}/manifests/{temp_tag}"
+            async with session.delete(delete_tag_url) as response:
+                # Ignore errors here - the tag might not exist or might be auto-deleted
+                pass
+
+            # Step 4: Delete the image using the full digest
             delete_url = f"{host}/v2/{feed}/{repo}/manifests/{full_digest}"
             async with session.delete(delete_url) as response:
                 if response.status not in (200, 202):
@@ -394,13 +445,31 @@ async def delete_untagged_images(
 
     print(f"Found {len(untagged)} untagged images in {feed}/{repo}")
 
-    # Delete each untagged image directly by digest
-    for image in untagged:
-        success = await delete_image(
+    # Optimize: Get repository ID and CSRF token once for all deletions
+    host = host.rstrip("/")
+    repo_url = f"{host}/containers/repositories/{feed}/{repo}/images"
+    await page.goto(repo_url)
+    await page.wait_for_load_state("networkidle")
+
+    content = await page.content()
+    repo_id_match = re.search(r'repositoryId=(\d+)', content)
+    if not repo_id_match:
+        print(f"Error: Could not find repository ID for {feed}/{repo}")
+        stats["failed"] = stats["total"]
+        return stats
+
+    repo_id = repo_id_match.group(1)
+
+    # Delete each untagged image
+    for idx, image in enumerate(untagged, start=1):
+        print(f"[{idx}/{len(untagged)}] Deleting {image.digest}...")
+
+        success = await delete_image_optimized(
             page=page,
             host=host,
             feed=feed,
             repo=repo,
+            repo_id=repo_id,
             digest=image.digest,
             dry_run=dry_run,
         )
@@ -417,3 +486,93 @@ async def delete_untagged_images(
         print(f"Failed to delete {stats['failed']} images")
 
     return stats
+
+
+async def delete_image_optimized(
+    page: Page,
+    host: str,
+    feed: str,
+    repo: str,
+    repo_id: str,
+    digest: str,
+    dry_run: bool = False,
+) -> bool:
+    """Delete an image using Docker Registry V2 API (optimized version).
+
+    This is an optimized version that doesn't need to fetch the repo ID on each call.
+
+    The deletion process:
+    1. Create a temporary tag for the image using its short digest (via Playwright form interaction)
+    2. Get the full SHA256 digest from the tag's manifest
+    3. Delete the image using the full digest (tag gets deleted automatically)
+
+    Args:
+        page: Authenticated Playwright page (for browser automation and cookies)
+        host: ProGet host URL
+        feed: Container feed name
+        repo: Repository name
+        repo_id: Repository ID (fetched once for the whole batch)
+        digest: Image digest (short form, 12 chars)
+        dry_run: If True, simulate deletion without making actual API calls
+
+    Returns:
+        True if deletion succeeded, False otherwise
+    """
+    if dry_run:
+        print(f"[DRY RUN] Would delete {feed}/{repo}@{digest}")
+        return True
+
+    try:
+        temp_tag = f"delete-{digest}"
+
+        # Step 1: Create a temporary tag using Playwright form interaction
+        # Navigate to the tag creation page
+        create_tag_url = f"{host}/docker-pages/tags/create?repositoryId={repo_id}"
+        await page.goto(create_tag_url)
+        await page.wait_for_load_state("networkidle")
+
+        # Fill the form
+        await page.fill('#ah0_ah4_ah0', temp_tag)  # Tag name field
+        await page.fill('#ah0_ah5_ah0', digest)     # Image field (short digest)
+
+        # Click the Create Tag button
+        await page.click('a[name="ah0~ah7~ah0"]')
+
+        # Wait for the form submission to complete
+        await page.wait_for_load_state("networkidle")
+
+        # Step 2: Get the full digest from the temporary tag's manifest
+        cookies = await page.context.cookies()
+        cookie_dict = {cookie["name"]: cookie["value"] for cookie in cookies}
+
+        async with aiohttp.ClientSession(cookies=cookie_dict) as session:
+            manifest_url = f"{host}/v2/{feed}/{repo}/manifests/{temp_tag}"
+            headers = {
+                'Accept': 'application/vnd.docker.distribution.manifest.v2+json'
+            }
+
+            async with session.head(manifest_url, headers=headers) as response:
+                if response.status != 200:
+                    raise Exception(
+                        f"Failed to get manifest for temp tag: HTTP {response.status}"
+                    )
+
+                if 'Docker-Content-Digest' not in response.headers:
+                    raise Exception("No Docker-Content-Digest header in response")
+
+                full_digest = response.headers['Docker-Content-Digest']
+
+            # Step 3: Delete the image using the full digest
+            # Note: Deleting the image will also delete all its tags including our temp tag
+            delete_url = f"{host}/v2/{feed}/{repo}/manifests/{full_digest}"
+            async with session.delete(delete_url) as response:
+                if response.status not in (200, 202):
+                    raise Exception(
+                        f"Failed to delete image: HTTP {response.status}"
+                    )
+
+        return True
+
+    except Exception as e:
+        print(f"Error deleting {digest}: {e}")
+        return False
