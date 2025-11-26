@@ -140,9 +140,6 @@ async def main():
         if total_stats["failed_deletes"] > 0:
             print(f"Failed to delete:         {total_stats['failed_deletes']}")
 
-        if args.dry_run:
-            print("\n[DRY RUN] No actual changes were made")
-
         # Calculate and display elapsed time
         elapsed_time = time.time() - start_time
         minutes = int(elapsed_time // 60)
@@ -152,6 +149,9 @@ async def main():
             print(f"\nTotal elapsed time:       {minutes}min {seconds}sec")
         else:
             print(f"\nTotal elapsed time:       {seconds}sec")
+
+        if args.dry_run:
+            print("\n[DRY RUN] No actual changes were made")
 
         print("=" * 80)
 
