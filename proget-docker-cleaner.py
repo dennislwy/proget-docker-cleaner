@@ -35,6 +35,7 @@ async def main():
         help="Automatically confirm deletion without prompting (default: False)",
     )
     parser.add_argument(
+        "-d",
         "--debug",
         action="store_true",
         help="Show browser window for debugging (default: headless mode)",
