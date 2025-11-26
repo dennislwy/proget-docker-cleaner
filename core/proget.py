@@ -6,20 +6,22 @@ repository discovery, image enumeration, and cleanup operations.
 
 import re
 from dataclasses import dataclass
-from playwright.async_api import Page, async_playwright
+from playwright.async_api import Page, Browser, Playwright, async_playwright
 import aiohttp
 
 
-async def login_to_proget(host: str, username: str, password: str) -> Page:
+async def login_to_proget(host: str, username: str, password: str, headless: bool = True) -> tuple[Page, Browser, Playwright]:
     """Login to ProGet using Playwright browser automation.
 
     Args:
         host: ProGet host URL (e.g., https://proget.mysite.com)
         username: ProGet username
         password: ProGet password
+        headless: Whether to run browser in headless mode (default: True)
 
     Returns:
-        Page: Authenticated Playwright page with session cookies
+        Tuple of (Page, Browser, Playwright): Authenticated page, browser, and playwright instances
+            These must be properly closed after use to avoid resource leaks
 
     Raises:
         Exception: If login fails
@@ -28,7 +30,7 @@ async def login_to_proget(host: str, username: str, password: str) -> Page:
     host = host.rstrip("/")
 
     playwright = await async_playwright().start()
-    browser = await playwright.chromium.launch(headless=False)
+    browser = await playwright.chromium.launch(headless=headless)
     context = await browser.new_context()
     page = await context.new_page()
 
@@ -59,7 +61,7 @@ async def login_to_proget(host: str, username: str, password: str) -> Page:
     print(f"Successfully logged in to ProGet at {host}")
     print(f"Current URL: {current_url}")
 
-    return page
+    return page, browser, playwright
 
 
 @dataclass

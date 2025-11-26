@@ -34,11 +34,21 @@ async def main():
         action="store_true",
         help="Automatically confirm deletion without prompting (default: False)",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Show browser window for debugging (default: headless mode)",
+    )
 
     args = parser.parse_args()
 
     # Start timing
     start_time = time.time()
+
+    # Initialize these outside try block so they're available in finally
+    page = None
+    browser = None
+    playwright = None
 
     try:
         print("=" * 80)
@@ -50,7 +60,12 @@ async def main():
 
         # Phase 1: Authentication
         print("\n[Phase 1/4] Authenticating to ProGet...")
-        page = await login_to_proget(args.host, args.username, args.password)
+        page, browser, playwright = await login_to_proget(
+            args.host,
+            args.username,
+            args.password,
+            headless=not args.debug
+        )
 
         # Phase 2: Repository Discovery
         print("\n[Phase 2/4] Discovering repositories...")
@@ -63,7 +78,6 @@ async def main():
 
         if not repositories:
             print(f"No repositories found with filter: {args.repo}")
-            await page.close()
             return
 
         print(f"Found {len(repositories)} repository(ies) to process")
@@ -155,14 +169,19 @@ async def main():
 
         print("=" * 80)
 
-        # Clean up
-        await page.close()
-
     except KeyboardInterrupt:
         print("\n\nOperation cancelled by user")
     except Exception as e:
         print(f"\nError: {e}")
         raise
+    finally:
+        # Properly clean up Playwright resources to avoid asyncio warnings
+        if page:
+            await page.close()
+        if browser:
+            await browser.close()
+        if playwright:
+            await playwright.stop()
 
 
 if __name__ == "__main__":
