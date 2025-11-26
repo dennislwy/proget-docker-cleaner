@@ -1,0 +1,402 @@
+"""Unit tests for image deletion operations."""
+
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
+from core.proget import delete_image, delete_tagged_images, DockerImage
+
+
+@pytest.mark.asyncio
+async def test_delete_image_dry_run():
+    """Test delete_image in dry-run mode."""
+    page = MagicMock()
+
+    result = await delete_image(
+        page=page,
+        host="https://proget.test.com",
+        feed="docker",
+        repo="test-repo",
+        digest="a3b8c21afe97",
+        dry_run=True,
+    )
+
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_delete_image_success():
+    """Test successful image deletion."""
+    # Mock Playwright page
+    page = MagicMock()
+    page.context.cookies = AsyncMock(
+        return_value=[{"name": "session", "value": "test123"}]
+    )
+
+    # Mock aiohttp responses
+    with patch("aiohttp.ClientSession") as mock_session:
+        # Mock the context manager
+        mock_ctx = AsyncMock()
+        mock_session.return_value.__aenter__.return_value = mock_ctx
+
+        # Mock GET image details response
+        mock_get = AsyncMock()
+        mock_get.status = 200
+        mock_get.text = AsyncMock(
+            return_value="<html>sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef</html>"
+        )
+        mock_get.__aenter__.return_value = mock_get
+
+        # Mock DELETE response
+        mock_delete = AsyncMock()
+        mock_delete.status = 202
+        mock_delete.__aenter__.return_value = mock_delete
+
+        mock_ctx.get = MagicMock(return_value=mock_get)
+        mock_ctx.delete = MagicMock(return_value=mock_delete)
+
+        result = await delete_image(
+            page=page,
+            host="https://proget.test.com",
+            feed="docker",
+            repo="test-repo",
+            digest="a3b8c21afe97",
+            dry_run=False,
+        )
+
+        assert result is True
+
+
+@pytest.mark.asyncio
+async def test_delete_image_failure_get_details():
+    """Test delete_image failure when getting image details."""
+    page = MagicMock()
+    page.context.cookies = AsyncMock(
+        return_value=[{"name": "session", "value": "test123"}]
+    )
+
+    with patch("aiohttp.ClientSession") as mock_session:
+        mock_ctx = AsyncMock()
+        mock_session.return_value.__aenter__.return_value = mock_ctx
+
+        # Mock failed GET response
+        mock_get = AsyncMock()
+        mock_get.status = 404
+        mock_get.__aenter__.return_value = mock_get
+        mock_ctx.get = MagicMock(return_value=mock_get)
+
+        result = await delete_image(
+            page=page,
+            host="https://proget.test.com",
+            feed="docker",
+            repo="test-repo",
+            digest="a3b8c21afe97",
+            dry_run=False,
+        )
+
+        assert result is False
+
+
+@pytest.mark.asyncio
+async def test_delete_image_failure_no_full_digest():
+    """Test delete_image failure when full digest is not found."""
+    page = MagicMock()
+    page.context.cookies = AsyncMock(
+        return_value=[{"name": "session", "value": "test123"}]
+    )
+
+    with patch("aiohttp.ClientSession") as mock_session:
+        mock_ctx = AsyncMock()
+        mock_session.return_value.__aenter__.return_value = mock_ctx
+
+        # Mock GET response with no digest
+        mock_get = AsyncMock()
+        mock_get.status = 200
+        mock_get.text = AsyncMock(return_value="<html>No digest here</html>")
+        mock_get.__aenter__.return_value = mock_get
+        mock_ctx.get = MagicMock(return_value=mock_get)
+
+        result = await delete_image(
+            page=page,
+            host="https://proget.test.com",
+            feed="docker",
+            repo="test-repo",
+            digest="a3b8c21afe97",
+            dry_run=False,
+        )
+
+        assert result is False
+
+
+@pytest.mark.asyncio
+async def test_delete_image_failure_delete_request():
+    """Test delete_image failure when DELETE request fails."""
+    page = MagicMock()
+    page.context.cookies = AsyncMock(
+        return_value=[{"name": "session", "value": "test123"}]
+    )
+
+    with patch("aiohttp.ClientSession") as mock_session:
+        mock_ctx = AsyncMock()
+        mock_session.return_value.__aenter__.return_value = mock_ctx
+
+        # Mock successful GET
+        mock_get = AsyncMock()
+        mock_get.status = 200
+        mock_get.text = AsyncMock(
+            return_value="<html>sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef</html>"
+        )
+        mock_get.__aenter__.return_value = mock_get
+
+        # Mock failed DELETE
+        mock_delete = AsyncMock()
+        mock_delete.status = 500
+        mock_delete.__aenter__.return_value = mock_delete
+
+        mock_ctx.get = MagicMock(return_value=mock_get)
+        mock_ctx.delete = MagicMock(return_value=mock_delete)
+
+        result = await delete_image(
+            page=page,
+            host="https://proget.test.com",
+            feed="docker",
+            repo="test-repo",
+            digest="a3b8c21afe97",
+            dry_run=False,
+        )
+
+        assert result is False
+
+
+@pytest.mark.asyncio
+async def test_delete_image_with_trailing_slash():
+    """Test delete_image handles trailing slash in host."""
+    page = MagicMock()
+    page.context.cookies = AsyncMock(
+        return_value=[{"name": "session", "value": "test123"}]
+    )
+
+    with patch("aiohttp.ClientSession") as mock_session:
+        mock_ctx = AsyncMock()
+        mock_session.return_value.__aenter__.return_value = mock_ctx
+
+        # Mock responses
+        mock_get = AsyncMock()
+        mock_get.status = 200
+        mock_get.text = AsyncMock(
+            return_value="<html>sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef</html>"
+        )
+        mock_get.__aenter__.return_value = mock_get
+
+        mock_delete = AsyncMock()
+        mock_delete.status = 202
+        mock_delete.__aenter__.return_value = mock_delete
+
+        mock_ctx.get = MagicMock(return_value=mock_get)
+        mock_ctx.delete = MagicMock(return_value=mock_delete)
+
+        result = await delete_image(
+            page=page,
+            host="https://proget.test.com/",  # Trailing slash
+            feed="docker",
+            repo="test-repo",
+            digest="a3b8c21afe97",
+            dry_run=False,
+        )
+
+        assert result is True
+
+
+@pytest.mark.asyncio
+async def test_delete_image_accepts_200_status():
+    """Test delete_image accepts HTTP 200 as success."""
+    page = MagicMock()
+    page.context.cookies = AsyncMock(
+        return_value=[{"name": "session", "value": "test123"}]
+    )
+
+    with patch("aiohttp.ClientSession") as mock_session:
+        mock_ctx = AsyncMock()
+        mock_session.return_value.__aenter__.return_value = mock_ctx
+
+        mock_get = AsyncMock()
+        mock_get.status = 200
+        mock_get.text = AsyncMock(
+            return_value="<html>sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef</html>"
+        )
+        mock_get.__aenter__.return_value = mock_get
+
+        # DELETE returns 200 instead of 202
+        mock_delete = AsyncMock()
+        mock_delete.status = 200
+        mock_delete.__aenter__.return_value = mock_delete
+
+        mock_ctx.get = MagicMock(return_value=mock_get)
+        mock_ctx.delete = MagicMock(return_value=mock_delete)
+
+        result = await delete_image(
+            page=page,
+            host="https://proget.test.com",
+            feed="docker",
+            repo="test-repo",
+            digest="a3b8c21afe97",
+            dry_run=False,
+        )
+
+        assert result is True
+
+
+@pytest.mark.asyncio
+async def test_delete_tagged_images_no_delete_tagged():
+    """Test delete_tagged_images with no delete-tagged images."""
+    page = MagicMock()
+
+    images = [
+        DockerImage(digest="abc123", tags=["v1.0"], published_date="2024-01-01", downloads="10"),
+        DockerImage(digest="def456", tags=["v2.0"], published_date="2024-01-02", downloads="5"),
+    ]
+
+    stats = await delete_tagged_images(
+        page=page,
+        host="https://proget.test.com",
+        feed="docker",
+        repo="test-repo",
+        images=images,
+        dry_run=False,
+    )
+
+    assert stats["total"] == 0
+    assert stats["deleted"] == 0
+    assert stats["failed"] == 0
+
+
+@pytest.mark.asyncio
+async def test_delete_tagged_images_dry_run():
+    """Test delete_tagged_images in dry-run mode."""
+    page = MagicMock()
+
+    images = [
+        DockerImage(digest="abc123", tags=[], published_date="2024-01-01", downloads="10"),
+        DockerImage(digest="def456", tags=["delete-1"], published_date="2024-01-02", downloads="5"),
+        DockerImage(digest="ghi789", tags=["v1.0"], published_date="2024-01-03", downloads="15"),
+    ]
+
+    stats = await delete_tagged_images(
+        page=page,
+        host="https://proget.test.com",
+        feed="docker",
+        repo="test-repo",
+        images=images,
+        dry_run=True,
+    )
+
+    assert stats["total"] == 2
+    assert stats["deleted"] == 2
+    assert stats["failed"] == 0
+
+
+@pytest.mark.asyncio
+async def test_delete_tagged_images_success():
+    """Test successful deletion of tagged images."""
+    page = MagicMock()
+    page.context.cookies = AsyncMock(
+        return_value=[{"name": "session", "value": "test123"}]
+    )
+
+    images = [
+        DockerImage(digest="abc123", tags=["delete-1"], published_date="2024-01-01", downloads="10"),
+        DockerImage(digest="def456", tags=["delete-2"], published_date="2024-01-02", downloads="5"),
+    ]
+
+    with patch("core.proget.delete_image", new=AsyncMock(return_value=True)):
+        stats = await delete_tagged_images(
+            page=page,
+            host="https://proget.test.com",
+            feed="docker",
+            repo="test-repo",
+            images=images,
+            dry_run=False,
+        )
+
+    assert stats["total"] == 2
+    assert stats["deleted"] == 2
+    assert stats["failed"] == 0
+
+
+@pytest.mark.asyncio
+async def test_delete_tagged_images_partial_failure():
+    """Test delete_tagged_images with some failures."""
+    page = MagicMock()
+    page.context.cookies = AsyncMock(
+        return_value=[{"name": "session", "value": "test123"}]
+    )
+
+    images = [
+        DockerImage(digest="abc123", tags=["delete-1"], published_date="2024-01-01", downloads="10"),
+        DockerImage(digest="def456", tags=["delete-2"], published_date="2024-01-02", downloads="5"),
+        DockerImage(digest="ghi789", tags=[], published_date="2024-01-03", downloads="7"),
+    ]
+
+    # Mock delete_image to return True, False, True
+    with patch("core.proget.delete_image", new=AsyncMock(side_effect=[True, False, True])):
+        stats = await delete_tagged_images(
+            page=page,
+            host="https://proget.test.com",
+            feed="docker",
+            repo="test-repo",
+            images=images,
+            dry_run=False,
+        )
+
+    assert stats["total"] == 3
+    assert stats["deleted"] == 2
+    assert stats["failed"] == 1
+
+
+@pytest.mark.asyncio
+async def test_delete_tagged_images_only_deletes_untagged():
+    """Test that delete_tagged_images only deletes untagged/delete-tagged images."""
+    page = MagicMock()
+
+    images = [
+        DockerImage(digest="abc123", tags=["delete-1"], published_date="2024-01-01", downloads="10"),
+        DockerImage(digest="def456", tags=[], published_date="2024-01-02", downloads="5"),
+        DockerImage(digest="ghi789", tags=["v1.0"], published_date="2024-01-03", downloads="15"),
+        DockerImage(digest="jkl012", tags=["latest"], published_date="2024-01-04", downloads="20"),
+    ]
+
+    stats = await delete_tagged_images(
+        page=page,
+        host="https://proget.test.com",
+        feed="docker",
+        repo="test-repo",
+        images=images,
+        dry_run=True,
+    )
+
+    # Should only delete the first two images (delete-1 and untagged)
+    assert stats["total"] == 2
+    assert stats["deleted"] == 2
+    assert stats["failed"] == 0
+
+
+@pytest.mark.asyncio
+async def test_delete_tagged_images_with_multiple_delete_tags():
+    """Test deleting images with multiple delete- prefix tags."""
+    page = MagicMock()
+
+    images = [
+        DockerImage(digest="abc123", tags=["delete-1", "delete-2"], published_date="2024-01-01", downloads="10"),
+        DockerImage(digest="def456", tags=["delete-3"], published_date="2024-01-02", downloads="5"),
+    ]
+
+    stats = await delete_tagged_images(
+        page=page,
+        host="https://proget.test.com",
+        feed="docker",
+        repo="test-repo",
+        images=images,
+        dry_run=True,
+    )
+
+    assert stats["total"] == 2
+    assert stats["deleted"] == 2
+    assert stats["failed"] == 0

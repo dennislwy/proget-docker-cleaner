@@ -42,14 +42,18 @@ proget-docker-cleaner/
 │   ├── integration/                 # Integration tests (live ProGet)
 │   │   ├── __init__.py
 │   │   ├── test_authentication_live.py
+│   │   ├── test_deletion_live.py
 │   │   ├── test_image_live.py
-│   │   └── test_repository_live.py
+│   │   ├── test_repository_live.py
+│   │   └── test_tagging_live.py
 │   └── unit/                        # Unit tests
 │       ├── __init__.py
 │       ├── test_authentication.py
 │       ├── test_cli.py
+│       ├── test_deletion.py
 │       ├── test_image.py
-│       └── test_repository.py
+│       ├── test_repository.py
+│       └── test_tagging.py
 ├── analyze_repos.py                 # Analysis script to scan all repositories
 ├── proget-docker-cleaner.py         # Main CLI tool
 ├── pyproject.toml                   # Project dependencies and metadata
@@ -82,19 +86,25 @@ proget-docker-cleaner/
 - ✅ DockerImage dataclass with `is_untagged` property
 - ✅ Test coverage: 18 tests (14 unit + 4 integration)
 
-**Total Test Coverage**: 41 tests, 100% code coverage
+**Phase 4: Image Tagging Operations**
+- ✅ Tag individual images using Docker Registry V2 API
+- ✅ Batch tagging of untagged images with delete-{counter}
+- ✅ Extract full digest (sha256:...) from short digest
+- ✅ GET manifest and PUT to new tag
+- ✅ Dry-run mode support
+- ✅ Error handling and detailed logging
+- ✅ Test coverage: 16 tests (14 unit + 2 integration)
 
-### 🔄 In Progress
+**Phase 5: Image Deletion Operations**
+- ✅ Delete individual images using Docker Registry V2 API
+- ✅ Batch deletion of delete-tagged images
+- ✅ Extract full digest and DELETE manifest
+- ✅ Dry-run mode support
+- ✅ Deletion statistics tracking
+- ✅ Error handling and detailed logging
+- ✅ Test coverage: 15 tests (13 unit + 2 integration)
 
-**Phase 4: Image Tagging Operations** (Not started)
-- Tag untagged images with delete-{counter}
-- Batch tagging operations
-- Error handling and retry logic
-
-**Phase 5: Image Deletion Operations** (Not started)
-- Delete tagged images
-- Track deletion statistics
-- Rollback mechanism
+**Total Test Coverage**: 77 tests, 100% code coverage
 
 ### 📋 Planned Phases
 
@@ -251,12 +261,14 @@ Estimated Storage to Reclaim: 125 GB - 625 GB
 
 ## Architecture
 
-The tool uses Playwright to interact with ProGet's web interface since ProGet doesn't provide a comprehensive REST API for all operations. Key components:
+The tool uses Playwright to interact with ProGet's web interface and Docker Registry V2 API for image operations. Key components:
 
-1. **Authentication Module** (`core/proget.py:12-61`): Handles login and session management
-2. **Repository Discovery** (`core/proget.py:83-151`): Fetches and parses repository list
-3. **Image Enumeration** (`core/proget.py:184-290`): Identifies tagged and untagged images
-4. **Data Models**:
+1. **Authentication Module** (`core/proget.py:13-62`): Handles login and session management
+2. **Repository Discovery** (`core/proget.py:84-152`): Fetches and parses repository list
+3. **Image Enumeration** (`core/proget.py:185-289`): Identifies tagged and untagged images
+4. **Image Tagging** (`core/proget.py:292-438`): Tags images using Docker Registry V2 API
+5. **Image Deletion** (`core/proget.py:441-568`): Deletes images using Docker Registry V2 API
+6. **Data Models**:
    - `Repository` dataclass for repository metadata
    - `DockerImage` dataclass for image data with `is_untagged` property
 
@@ -301,5 +313,6 @@ MIT License - See LICENSE file for details
 
 - Built with async Python patterns for performance
 - Tested against live ProGet instances
-- Comprehensive test coverage (41 tests, 100% coverage)
+- Comprehensive test coverage (77 tests, 100% coverage)
 - Follows Google Style Python docstrings
+- Uses Docker Registry V2 API for image operations

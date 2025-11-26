@@ -7,6 +7,7 @@ repository discovery, image enumeration, and cleanup operations.
 import re
 from dataclasses import dataclass
 from playwright.async_api import Page, async_playwright
+import aiohttp
 
 
 async def login_to_proget(host: str, username: str, password: str) -> Page:
@@ -286,3 +287,282 @@ def identify_untagged_images(images: list[DockerImage]) -> list[DockerImage]:
         List of untagged images only
     """
     return [img for img in images if img.is_untagged]
+
+
+async def tag_image(
+    page: Page,
+    host: str,
+    feed: str,
+    repo: str,
+    digest: str,
+    tag: str,
+    dry_run: bool = False,
+) -> bool:
+    """Tag an image with a specific tag using Docker Registry V2 API.
+
+    Args:
+        page: Authenticated Playwright page (for session cookies)
+        host: ProGet host URL
+        feed: Container feed name
+        repo: Repository name
+        digest: Image digest (short form, 12 chars)
+        tag: Tag name to apply
+        dry_run: If True, simulate tagging without making actual API calls
+
+    Returns:
+        True if tagging succeeded, False otherwise
+
+    Raises:
+        Exception: If tagging fails
+    """
+    # Remove trailing slash from host if present
+    host = host.rstrip("/")
+
+    if dry_run:
+        print(f"[DRY RUN] Would tag {feed}/{repo}@{digest} as {tag}")
+        return True
+
+    try:
+        # Get cookies from Playwright page for authentication
+        cookies = await page.context.cookies()
+        cookie_dict = {cookie["name"]: cookie["value"] for cookie in cookies}
+
+        async with aiohttp.ClientSession(cookies=cookie_dict) as session:
+            # Step 1: Get the full digest (sha256:...) from the short digest
+            # Navigate to the image details page to get the full digest
+            image_url = f"{host}/containers/images/{feed}/{repo}?digest={digest}"
+            async with session.get(image_url) as response:
+                if response.status != 200:
+                    raise Exception(
+                        f"Failed to get image details: HTTP {response.status}"
+                    )
+                content = await response.text()
+
+                # Extract full digest from page
+                # Pattern: sha256:[64-char hex]
+                full_digest_match = re.search(r"sha256:[a-f0-9]{64}", content)
+                if not full_digest_match:
+                    raise Exception(f"Could not find full digest for {digest}")
+                full_digest = full_digest_match.group(0)
+
+            # Step 2: Get the image manifest using the full digest
+            manifest_url = f"{host}/v2/{feed}/{repo}/manifests/{full_digest}"
+            async with session.get(
+                manifest_url,
+                headers={
+                    "Accept": "application/vnd.docker.distribution.manifest.v2+json"
+                },
+            ) as response:
+                if response.status != 200:
+                    raise Exception(
+                        f"Failed to get manifest: HTTP {response.status}"
+                    )
+                manifest = await response.read()
+                content_type = response.headers.get("Content-Type")
+
+            # Step 3: PUT the manifest to the new tag
+            tag_url = f"{host}/v2/{feed}/{repo}/manifests/{tag}"
+            async with session.put(
+                tag_url, data=manifest, headers={"Content-Type": content_type}
+            ) as response:
+                if response.status not in (200, 201):
+                    raise Exception(f"Failed to tag image: HTTP {response.status}")
+
+            print(f"Successfully tagged {feed}/{repo}@{digest} as {tag}")
+            return True
+
+    except Exception as e:
+        print(f"Error tagging image {feed}/{repo}@{digest}: {e}")
+        return False
+
+
+async def tag_untagged_images(
+    page: Page,
+    host: str,
+    feed: str,
+    repo: str,
+    images: list[DockerImage],
+    dry_run: bool = False,
+) -> dict[str, int]:
+    """Tag all untagged images in a repository with delete-{counter} tags.
+
+    Args:
+        page: Authenticated Playwright page
+        host: ProGet host URL
+        feed: Container feed name
+        repo: Repository name
+        images: List of all images in the repository
+        dry_run: If True, simulate tagging without making actual API calls
+
+    Returns:
+        Dictionary with statistics:
+        - total: Total number of untagged images found
+        - tagged: Number of images successfully tagged
+        - failed: Number of images that failed to tag
+    """
+    # Identify untagged images
+    untagged = identify_untagged_images(images)
+
+    stats = {"total": len(untagged), "tagged": 0, "failed": 0}
+
+    if not untagged:
+        print(f"No untagged images found in {feed}/{repo}")
+        return stats
+
+    print(f"Found {len(untagged)} untagged images in {feed}/{repo}")
+
+    # Tag each untagged image with delete-{counter}
+    for counter, image in enumerate(untagged, start=1):
+        tag = f"delete-{counter}"
+        success = await tag_image(
+            page=page,
+            host=host,
+            feed=feed,
+            repo=repo,
+            digest=image.digest,
+            tag=tag,
+            dry_run=dry_run,
+        )
+
+        if success:
+            stats["tagged"] += 1
+        else:
+            stats["failed"] += 1
+
+    print(
+        f"Tagged {stats['tagged']}/{stats['total']} untagged images in {feed}/{repo}"
+    )
+    if stats["failed"] > 0:
+        print(f"Failed to tag {stats['failed']} images")
+
+    return stats
+
+
+async def delete_image(
+    page: Page,
+    host: str,
+    feed: str,
+    repo: str,
+    digest: str,
+    dry_run: bool = False,
+) -> bool:
+    """Delete an image using Docker Registry V2 API.
+
+    Args:
+        page: Authenticated Playwright page (for session cookies)
+        host: ProGet host URL
+        feed: Container feed name
+        repo: Repository name
+        digest: Image digest (short form, 12 chars)
+        dry_run: If True, simulate deletion without making actual API calls
+
+    Returns:
+        True if deletion succeeded, False otherwise
+
+    Raises:
+        Exception: If deletion fails
+    """
+    # Remove trailing slash from host if present
+    host = host.rstrip("/")
+
+    if dry_run:
+        print(f"[DRY RUN] Would delete {feed}/{repo}@{digest}")
+        return True
+
+    try:
+        # Get cookies from Playwright page for authentication
+        cookies = await page.context.cookies()
+        cookie_dict = {cookie["name"]: cookie["value"] for cookie in cookies}
+
+        async with aiohttp.ClientSession(cookies=cookie_dict) as session:
+            # Step 1: Get the full digest (sha256:...) from the short digest
+            image_url = f"{host}/containers/images/{feed}/{repo}?digest={digest}"
+            async with session.get(image_url) as response:
+                if response.status != 200:
+                    raise Exception(
+                        f"Failed to get image details: HTTP {response.status}"
+                    )
+                content = await response.text()
+
+                # Extract full digest from page
+                # Pattern: sha256:[64-char hex]
+                full_digest_match = re.search(r"sha256:[a-f0-9]{64}", content)
+                if not full_digest_match:
+                    raise Exception(f"Could not find full digest for {digest}")
+                full_digest = full_digest_match.group(0)
+
+            # Step 2: Delete the image using the full digest
+            # Docker Registry V2 API: DELETE /v2/{name}/manifests/{reference}
+            delete_url = f"{host}/v2/{feed}/{repo}/manifests/{full_digest}"
+            async with session.delete(delete_url) as response:
+                if response.status not in (200, 202):
+                    raise Exception(
+                        f"Failed to delete image: HTTP {response.status}"
+                    )
+
+            print(f"Successfully deleted {feed}/{repo}@{digest}")
+            return True
+
+    except Exception as e:
+        print(f"Error deleting image {feed}/{repo}@{digest}: {e}")
+        return False
+
+
+async def delete_tagged_images(
+    page: Page,
+    host: str,
+    feed: str,
+    repo: str,
+    images: list[DockerImage],
+    dry_run: bool = False,
+) -> dict[str, int]:
+    """Delete all images with delete- prefix tags in a repository.
+
+    Args:
+        page: Authenticated Playwright page
+        host: ProGet host URL
+        feed: Container feed name
+        repo: Repository name
+        images: List of all images in the repository
+        dry_run: If True, simulate deletion without making actual API calls
+
+    Returns:
+        Dictionary with statistics:
+        - total: Total number of images to delete
+        - deleted: Number of images successfully deleted
+        - failed: Number of images that failed to delete
+    """
+    # Identify images with delete- tags (these are the ones we want to delete)
+    delete_tagged = identify_untagged_images(images)
+
+    stats = {"total": len(delete_tagged), "deleted": 0, "failed": 0}
+
+    if not delete_tagged:
+        print(f"No delete-tagged images found in {feed}/{repo}")
+        return stats
+
+    print(f"Found {len(delete_tagged)} delete-tagged images in {feed}/{repo}")
+
+    # Delete each image
+    for image in delete_tagged:
+        success = await delete_image(
+            page=page,
+            host=host,
+            feed=feed,
+            repo=repo,
+            digest=image.digest,
+            dry_run=dry_run,
+        )
+
+        if success:
+            stats["deleted"] += 1
+        else:
+            stats["failed"] += 1
+
+    print(
+        f"Deleted {stats['deleted']}/{stats['total']} delete-tagged images in {feed}/{repo}"
+    )
+    if stats["failed"] > 0:
+        print(f"Failed to delete {stats['failed']} images")
+
+    return stats
