@@ -29,7 +29,7 @@ Useful for debugging, extending the tool, or onboarding new developers.
 
 **Example:**
 ```
-/containers/repositories/gsf/api-service/images
+/containers/repositories/feed123/api-service/images
 ```
 
 **Extracted data:**
@@ -74,7 +74,7 @@ Form Data:
 
 **Example:**
 ```
-HEAD /v2/gsf/api-service/manifests/delete-1f3f64fb947b
+HEAD /v2/feed123/api-service/manifests/delete-1f3f64fb947b
 Response Headers:
   Docker-Content-Digest: sha256:1f3f64fb947bc6a4c9c2946e8c33f346f2124c0058f2e20a657aa7fcdd91d18b
 ```
@@ -87,7 +87,7 @@ Response Headers:
 
 **Example:**
 ```
-DELETE /v2/gsf/api-service/manifests/sha256:1f3f64fb947bc6a4c9c2946e8c33f346f2124c0058f2e20a657aa7fcdd91d18b
+DELETE /v2/deef123/api-service/manifests/sha256:1f3f64fb947bc6a4c9c2946e8c33f346f2124c0058f2e20a657aa7fcdd91d18b
 ```
 
 **Response:** HTTP 200 or 202 on success
@@ -95,14 +95,14 @@ DELETE /v2/gsf/api-service/manifests/sha256:1f3f64fb947bc6a4c9c2946e8c33f346f212
 **Note:** Deleting an image automatically removes all its tags, including temporary tags created during the deletion process.
 
 ## Endpoint Summary Table
-| Purpose                  | Method | URL                                                 | Notes                                    |
-| ------------------------ | ------ | --------------------------------------------------- | ---------------------------------------- |
-| Login                    | POST   | `/log-in`                                           | Required to get session cookies          |
-| List repositories        | GET    | `/containers?skip=0&take=1000`                      | HTML parsing                             |
-| List images              | GET    | `/containers/repositories/<feed>/<repo>/images`     | HTML parsing, extracts short digests     |
-| Create temporary tag     | POST   | `/docker-pages/tags/create?repositoryId=<id>`       | Playwright form automation required      |
-| Get full digest from tag | HEAD   | `/v2/<feed>/<repo>/manifests/<tag>`                 | Docker Registry V2 API                   |
-| Delete image             | DELETE | `/v2/<feed>/<repo>/manifests/<digest>`              | Docker Registry V2 API, requires full SHA256 |
+| Purpose                  | Method | URL                                             | Notes                                        |
+| ------------------------ | ------ | ----------------------------------------------- | -------------------------------------------- |
+| Login                    | POST   | `/log-in`                                       | Required to get session cookies              |
+| List repositories        | GET    | `/containers?skip=0&take=1000`                  | HTML parsing                                 |
+| List images              | GET    | `/containers/repositories/<feed>/<repo>/images` | HTML parsing, extracts short digests         |
+| Create temporary tag     | POST   | `/docker-pages/tags/create?repositoryId=<id>`   | Playwright form automation required          |
+| Get full digest from tag | HEAD   | `/v2/<feed>/<repo>/manifests/<tag>`             | Docker Registry V2 API                       |
+| Delete image             | DELETE | `/v2/<feed>/<repo>/manifests/<digest>`          | Docker Registry V2 API, requires full SHA256 |
 
 ## Tag-then-Delete Workflow
 

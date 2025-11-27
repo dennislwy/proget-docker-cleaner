@@ -56,7 +56,6 @@ proget-docker-cleaner/
 ├── proget-docker-cleaner.py         # Main CLI tool
 ├── pyproject.toml                   # Project dependencies and metadata
 ├── uv.lock                          # Dependency lock file
-├── CLAUDE.md                        # Development guidance for Claude Code
 ├── README.md                        # This file
 └── .gitignore                       # Git ignore patterns
 ```
@@ -185,12 +184,14 @@ This will scan all repositories and generate a report showing:
 
 | Flag                | Short | Required | Description                                              |
 | ------------------- | ----- | -------- | -------------------------------------------------------- |
-| `--host <url>`      | `-h`  | Yes      | Base ProGet URL, e.g. `https://proget.mysite.com`        |
+| `--host <url>`      | `-s`  | Yes      | Base ProGet URL, e.g. `https://proget.mysite.com`        |
 | `--username <user>` | `-u`  | Yes      | ProGet username                                          |
 | `--password <pass>` | `-p`  | Yes      | ProGet password                                          |
-| `--dry-run`         | `-d`  | No       | Simulate actions without deletion                        |
+| `--feed <name>`     | `-f`  | No       | Container feed name (default: docker)                    |
+| `--dry-run`         | `-dr` | No       | Simulate actions without deletion                        |
 | `--yes`             | `-y`  | No       | Auto-confirm deletion without prompting (default: False) |
 | `--repo <name>`     | `-r`  | No       | Only clean one specific repository                       |
+| `--debug`           | `-d`  | No       | Show browser window for debugging (default: headless)    |
 | `--concurrency <n>` | `-c`  | No       | Clean multiple repos concurrently (default: 1)           |
 
 ## Testing
@@ -285,10 +286,6 @@ The deletion process works around ProGet's limitation of only exposing short 12-
 - ⚠️ Avoid using high concurrency if your ProGet server is small
 - ⚠️ The tool only targets untagged images - tagged images are safe
 - ⚠️ Images with `delete-` prefix tags are considered untagged and to be deleted
-
-## Development
-
-See [CLAUDE.md](CLAUDE.md) for development guidelines and commands.
 
 ### Running in Development
 
