@@ -137,7 +137,7 @@ def parse_repositories_html(html_content: str, feed: str = "docker") -> list[Rep
         List of Repository objects
     """
     # Pattern to match container tag links
-    # Example: /containers/tags/gsf/my-repo/latest/overview
+    # Example: /containers/tags/feed123/my-repo/latest/overview
     # We want to extract the repository name (group 1)
     pattern = rf'/containers/tags/{re.escape(feed)}/([^/"]+)/[^/"]+/overview'
 

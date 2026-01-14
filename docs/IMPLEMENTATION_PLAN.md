@@ -763,7 +763,7 @@ async def delete_image_optimized(
 ### Performance Metrics
 
 **Production Test Results:**
-- Repository: `gsf-eca-service-systemactivity`
+- Repository: `service-systemactivity`
 - Total images: 143 (1 tagged, 142 untagged)
 - Deletion time: 3 minutes 35 seconds
 - Success rate: 100% (142/142 deleted successfully)

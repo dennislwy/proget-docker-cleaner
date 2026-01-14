@@ -423,12 +423,12 @@ ProGet UI only exposes short 12-character digests, but Docker Registry V2 API re
 
 **Alternatives Considered:**
 
-| Approach | Pros | Cons | Decision |
-|----------|------|------|----------|
-| Direct API with short digest | Simple, fast | ❌ Returns HTTP 404 | Rejected |
-| Scrape full digest from UI | No extra API calls | ❌ Full digest not in HTML | Rejected |
-| HTTP POST to tag form | Straightforward | ❌ Requires JS validation | Rejected |
-| **Playwright tag creation** | ✅ Works with JS forms | Slower than direct API | **Selected** |
+| Approach                     | Pros                  | Cons                      | Decision     |
+| ---------------------------- | --------------------- | ------------------------- | ------------ |
+| Direct API with short digest | Simple, fast          | ❌ Returns HTTP 404        | Rejected     |
+| Scrape full digest from UI   | No extra API calls    | ❌ Full digest not in HTML | Rejected     |
+| HTTP POST to tag form        | Straightforward       | ❌ Requires JS validation  | Rejected     |
+| **Playwright tag creation**  | ✅ Works with JS forms | Slower than direct API    | **Selected** |
 
 **Rationale:**
 - Only working solution given ProGet's constraints
@@ -654,7 +654,7 @@ Total: ~1.5 seconds per image
 ```
 
 **Production Metrics:**
-- Repository: `gsf-eca-service-systemactivity`
+- Repository: `service-systemactivity`
 - Images: 142 untagged
 - Total time: 3min 35sec (215 seconds)
 - Average: 1.51 seconds per image
@@ -688,7 +688,7 @@ Total: ~1.5 seconds per image
 **Projected Performance:**
 
 | Images | Time (Sequential) | Time (Parallel x3) | Time (Parallel x5) |
-|--------|-------------------|--------------------|--------------------|
+| ------ | ----------------- | ------------------ | ------------------ |
 | 10     | 15s               | 7s                 | 5s                 |
 | 50     | 75s               | 30s                | 20s                |
 | 100    | 150s (2.5min)     | 60s (1min)         | 40s                |
@@ -869,7 +869,7 @@ tests/
 async def authenticated_page():
     """Shared fixture for live ProGet access"""
     page = await login_to_proget(
-        host="https://proget.gsf.ai",
+        host="https://proget.mysite.com",
         username="test",
         password="test123"
     )
@@ -1049,14 +1049,14 @@ class HarborBackend(RegistryBackend):
 
 ## Appendix: Technology Decision Matrix
 
-| Technology | Alternatives | Score | Rationale |
-|------------|-------------|-------|-----------|
-| **Python 3.12+** | Go, Node.js | 9/10 | Excellent async support, rich ecosystem |
-| **Playwright** | Selenium, Puppeteer | 8/10 | Modern async API, better performance |
-| **aiohttp** | requests, httpx | 7/10 | Native async, good performance |
-| **uv** | pip, poetry | 8/10 | Fast, modern, lockfile support |
-| **pytest** | unittest, nose | 9/10 | Best Python test framework |
-| **argparse** | click, typer | 7/10 | Standard library, no dependencies |
+| Technology       | Alternatives        | Score | Rationale                               |
+| ---------------- | ------------------- | ----- | --------------------------------------- |
+| **Python 3.12+** | Go, Node.js         | 9/10  | Excellent async support, rich ecosystem |
+| **Playwright**   | Selenium, Puppeteer | 8/10  | Modern async API, better performance    |
+| **aiohttp**      | requests, httpx     | 7/10  | Native async, good performance          |
+| **uv**           | pip, poetry         | 8/10  | Fast, modern, lockfile support          |
+| **pytest**       | unittest, nose      | 9/10  | Best Python test framework              |
+| **argparse**     | click, typer        | 7/10  | Standard library, no dependencies       |
 
 **Scoring Criteria:**
 - 9-10: Excellent fit, clear winner
@@ -1068,9 +1068,9 @@ class HarborBackend(RegistryBackend):
 
 ## Document History
 
-| Version | Date | Author | Changes |
-|---------|------|--------|---------|
-| 1.0 | 2025-11-26 | Project Team | Initial architecture documentation |
+| Version | Date       | Author       | Changes                            |
+| ------- | ---------- | ------------ | ---------------------------------- |
+| 1.0     | 2025-11-26 | Project Team | Initial architecture documentation |
 
 ---
 
