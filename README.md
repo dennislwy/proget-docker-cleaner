@@ -301,23 +301,24 @@ python proget-docker-cleaner.py \
   --dry-run
 ```
 
-## Contributing
+## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
 3. Make your changes with tests
 4. Ensure all tests pass: `uv run pytest tests/`
 5. Maintain 100% code coverage
 6. Submit a pull request
 
-## License
+## 🙏 Sponsor
 
-MIT License - See LICENSE file for details
+Like this project? **Leave a star**! ⭐⭐⭐⭐⭐
 
-## Acknowledgments
+You love what I do? <a href="https://www.buymeacoffee.com/dennislwy" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
 
-- Built with async Python patterns for performance
-- Tested against live ProGet instances
-- Comprehensive test coverage (62 tests, 100% coverage)
-- Follows Google Style Python docstrings
-- Uses Docker Registry V2 API for image operations
+Recognized my open-source contributions? [Nominate me](https://stars.github.com/nominate) as GitHub Star! 💫
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
