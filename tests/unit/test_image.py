@@ -1,7 +1,12 @@
 """Unit tests for image enumeration module."""
 
 import pytest
-from core.proget import DockerImage, parse_images_html, identify_untagged_images
+from core.proget import (
+    DockerImage,
+    parse_images_html,
+    identify_untagged_images,
+    identify_prefix_matched_images,
+)
 
 
 def test_docker_image_dataclass():
@@ -356,3 +361,33 @@ def test_identify_untagged_images_all_untagged():
     untagged = identify_untagged_images(images)
 
     assert len(untagged) == 2
+
+
+def test_identify_prefix_matched_images_filters_correctly():
+    """Test that identify_prefix_matched_images filters correctly."""
+    images = [
+        DockerImage(digest="a1", tags=["mr-100"], published_date="d", downloads="0"),
+        DockerImage(digest="a2", tags=["latest"], published_date="d", downloads="0"),
+        DockerImage(digest="a3", tags=["test-42"], published_date="d", downloads="0"),
+        DockerImage(digest="a4", tags=[], published_date="d", downloads="0"),
+    ]
+
+    matched = identify_prefix_matched_images(images, ["mr-", "test-"])
+
+    assert len(matched) == 2
+    assert matched[0].digest == "a1"
+    assert matched[1].digest == "a3"
+
+
+def test_identify_prefix_matched_images_empty_list():
+    """Test identify_prefix_matched_images with empty image list."""
+    assert identify_prefix_matched_images([], ["mr-"]) == []
+
+
+def test_identify_prefix_matched_images_no_matches():
+    """Test identify_prefix_matched_images when nothing matches."""
+    images = [
+        DockerImage(digest="a1", tags=["latest"], published_date="d", downloads="0"),
+    ]
+
+    assert identify_prefix_matched_images(images, ["mr-"]) == []

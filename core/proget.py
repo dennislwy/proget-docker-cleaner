@@ -302,6 +302,21 @@ def identify_untagged_images(images: list[DockerImage]) -> list[DockerImage]:
     return [img for img in images if img.is_untagged]
 
 
+def identify_prefix_matched_images(
+    images: list[DockerImage], prefixes: list[str]
+) -> list[DockerImage]:
+    """Filter images whose tags match any of the given prefixes.
+
+    Args:
+        images: List of all images
+        prefixes: List of tag prefixes to match against
+
+    Returns:
+        List of images with at least one tag matching at least one prefix
+    """
+    return [img for img in images if img.matches_tag_prefix(prefixes)]
+
+
 async def delete_image(
     page: Page,
     host: str,
