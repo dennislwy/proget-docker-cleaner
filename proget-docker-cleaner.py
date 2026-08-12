@@ -8,8 +8,6 @@ from core.proget import (
     get_images,
     delete_images,
     identify_images_to_delete,
-    identify_untagged_images,
-    identify_prefix_matched_images,
 )
 
 
@@ -142,10 +140,11 @@ async def main():
                 images, tag_prefixes=tag_prefixes, include_untagged=args.include_untagged
             )
             untagged_count = (
-                len(identify_untagged_images(images)) if args.include_untagged else 0
+                len([img for img in to_delete if img.is_untagged])
+                if args.include_untagged else 0
             )
             prefix_matched_count = (
-                len(identify_prefix_matched_images(images, tag_prefixes))
+                len([img for img in to_delete if img.matches_tag_prefix(tag_prefixes)])
                 if tag_prefixes
                 else 0
             )
@@ -178,8 +177,7 @@ async def main():
                 repo=repo.name,
                 images=images,
                 dry_run=args.dry_run,
-                tag_prefixes=tag_prefixes,
-                include_untagged=args.include_untagged,
+                images_to_delete=to_delete,
             )
 
             total_stats["deleted_images"] += delete_stats["deleted"]

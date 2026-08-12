@@ -267,13 +267,14 @@ async def test_delete_multiple_images_live(proget_test_credentials):
     print(f"Deleting {len(untagged)} untagged images in {repo.full_name}")
 
     # Delete the images
-    stats = await delete_tagged_images(
+    stats = await delete_images(
         page=page,
         host=proget_test_credentials["host"],
         feed=repo.feed,
         repo=repo.name,
         images=untagged,
         dry_run=False,
+        include_untagged=True,
     )
 
     # Verify statistics

@@ -481,6 +481,7 @@ async def delete_images(
     dry_run: bool = False,
     tag_prefixes: list[str] | None = None,
     include_untagged: bool = False,
+    images_to_delete: list[DockerImage] | None = None,
 ) -> dict[str, int]:
     """Delete images matching the selected cleanup criteria.
 
@@ -493,6 +494,8 @@ async def delete_images(
         dry_run: If True, simulate deletion without making actual API calls
         tag_prefixes: Optional list of tag prefixes; images with a matching tag are included
         include_untagged: If True, untagged images are included
+        images_to_delete: Pre-computed list of images to delete; if provided, skips
+            re-identification so the deleted set exactly matches what the caller confirmed
 
     Returns:
         Dictionary with statistics:
@@ -500,8 +503,12 @@ async def delete_images(
         - deleted: Number of images successfully deleted
         - failed: Number of images that failed to delete
     """
-    # Identify images matching the selected criteria
-    to_delete = identify_images_to_delete(images, tag_prefixes, include_untagged)
+    # Use pre-computed list if provided, otherwise identify from criteria
+    to_delete = (
+        images_to_delete
+        if images_to_delete is not None
+        else identify_images_to_delete(images, tag_prefixes, include_untagged)
+    )
 
     stats = {"total": len(to_delete), "deleted": 0, "failed": 0}
 
