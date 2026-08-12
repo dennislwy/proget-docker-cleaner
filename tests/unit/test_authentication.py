@@ -177,10 +177,12 @@ async def test_login_success_returns_page():
             return_value=mock_playwright
         )
 
-        result = await login_to_proget(
+        page, browser, playwright = await login_to_proget(
             host="https://proget.example.com",
             username="testuser",
             password="testpass",
         )
 
-        assert result == mock_page
+        assert page == mock_page
+        assert browser == mock_browser
+        assert playwright == mock_playwright
