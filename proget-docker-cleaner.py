@@ -25,6 +25,17 @@ async def main():
     parser.add_argument("-r",
         "--repo", help="Optional: specific repository to clean (default: all repositories)"
     )
+    parser.add_argument(
+        "-iu",
+        "--include-untagged",
+        action="store_true",
+        help="Include untagged images in cleanup (default: False)",
+    )
+    parser.add_argument(
+        "-ip",
+        "--include-prefix",
+        help="Include images with any tag matching a comma-separated list of prefixes (e.g. 'mr-,test')",
+    )
     parser.add_argument("-dr",
         "--dry-run", action="store_true", help="Run without making actual deletions"
     )
@@ -42,6 +53,18 @@ async def main():
     )
 
     args = parser.parse_args()
+
+    # Parse comma-separated tag prefixes into a list
+    tag_prefixes = (
+        [p.strip() for p in args.include_prefix.split(",") if p.strip()]
+        if args.include_prefix
+        else []
+    )
+
+    if not args.include_untagged and not tag_prefixes:
+        parser.error(
+            "At least one of --include-untagged or --include-prefix must be specified"
+        )
 
     # Start timing
     start_time = time.time()
