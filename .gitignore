@@ -4,6 +4,9 @@ CLAUDE.md
 .mcp.json
 nul
 images/
+.superpowers/
+superpowers/
+node_modules/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -183,6 +183,17 @@ class DockerImage:
         """
         return len(self.tags) == 0 or all(t.startswith("delete-") for t in self.tags)
 
+    def matches_tag_prefix(self, prefixes: list[str]) -> bool:
+        """Check if any tag starts with any of the given prefixes.
+
+        Args:
+            prefixes: List of tag prefixes to match against
+
+        Returns:
+            True if at least one tag starts with at least one prefix, False otherwise
+        """
+        return any(tag.startswith(prefix) for tag in self.tags for prefix in prefixes)
+
 
 async def get_images(
     page: Page, host: str, feed: str, repo: str
@@ -289,6 +300,55 @@ def identify_untagged_images(images: list[DockerImage]) -> list[DockerImage]:
         List of untagged images only
     """
     return [img for img in images if img.is_untagged]
+
+
+def identify_prefix_matched_images(
+    images: list[DockerImage], prefixes: list[str]
+) -> list[DockerImage]:
+    """Filter images whose tags match any of the given prefixes.
+
+    Args:
+        images: List of all images
+        prefixes: List of tag prefixes to match against
+
+    Returns:
+        List of images with at least one tag matching at least one prefix
+    """
+    return [img for img in images if img.matches_tag_prefix(prefixes)]
+
+
+def identify_images_to_delete(
+    images: list[DockerImage],
+    tag_prefixes: list[str] | None = None,
+    include_untagged: bool = False,
+) -> list[DockerImage]:
+    """Identify images to delete based on the selected cleanup criteria.
+
+    Args:
+        images: List of all images
+        tag_prefixes: Optional list of tag prefixes; images with a matching tag are included
+        include_untagged: If True, untagged images are included
+
+    Returns:
+        List of images to delete, deduplicated by digest (untagged images first,
+        then prefix-matched images not already included)
+    """
+    to_delete: list[DockerImage] = []
+    seen_digests: set[str] = set()
+
+    if include_untagged:
+        for img in identify_untagged_images(images):
+            if img.digest not in seen_digests:
+                to_delete.append(img)
+                seen_digests.add(img.digest)
+
+    if tag_prefixes:
+        for img in identify_prefix_matched_images(images, tag_prefixes):
+            if img.digest not in seen_digests:
+                to_delete.append(img)
+                seen_digests.add(img.digest)
+
+    return to_delete
 
 
 async def delete_image(
@@ -412,15 +472,18 @@ async def delete_image(
         return False
 
 
-async def delete_untagged_images(
+async def delete_images(
     page: Page,
     host: str,
     feed: str,
     repo: str,
     images: list[DockerImage],
     dry_run: bool = False,
+    tag_prefixes: list[str] | None = None,
+    include_untagged: bool = False,
+    images_to_delete: list[DockerImage] | None = None,
 ) -> dict[str, int]:
-    """Delete all untagged images in a repository.
+    """Delete images matching the selected cleanup criteria.
 
     Args:
         page: Authenticated Playwright page
@@ -429,23 +492,31 @@ async def delete_untagged_images(
         repo: Repository name
         images: List of all images in the repository
         dry_run: If True, simulate deletion without making actual API calls
+        tag_prefixes: Optional list of tag prefixes; images with a matching tag are included
+        include_untagged: If True, untagged images are included
+        images_to_delete: Pre-computed list of images to delete; if provided, skips
+            re-identification so the deleted set exactly matches what the caller confirmed
 
     Returns:
         Dictionary with statistics:
-        - total: Total number of untagged images to delete
+        - total: Total number of images to delete
         - deleted: Number of images successfully deleted
         - failed: Number of images that failed to delete
     """
-    # Identify untagged images
-    untagged = identify_untagged_images(images)
+    # Use pre-computed list if provided, otherwise identify from criteria
+    to_delete = (
+        images_to_delete
+        if images_to_delete is not None
+        else identify_images_to_delete(images, tag_prefixes, include_untagged)
+    )
 
-    stats = {"total": len(untagged), "deleted": 0, "failed": 0}
+    stats = {"total": len(to_delete), "deleted": 0, "failed": 0}
 
-    if not untagged:
-        print(f"No untagged images found in {feed}/{repo}")
+    if not to_delete:
+        print(f"No images to delete in {feed}/{repo}")
         return stats
 
-    print(f"Found {len(untagged)} untagged images in {feed}/{repo}")
+    print(f"Found {len(to_delete)} images to delete in {feed}/{repo}")
 
     # Optimize: Get repository ID and CSRF token once for all deletions
     host = host.rstrip("/")
@@ -462,9 +533,9 @@ async def delete_untagged_images(
 
     repo_id = repo_id_match.group(1)
 
-    # Delete each untagged image
-    for idx, image in enumerate(untagged, start=1):
-        print(f"[{idx}/{len(untagged)}] Deleting {image.digest}...")
+    # Delete each image
+    for idx, image in enumerate(to_delete, start=1):
+        print(f"[{idx}/{len(to_delete)}] Deleting {image.digest}...")
 
         success = await delete_image_optimized(
             page=page,
@@ -482,7 +553,7 @@ async def delete_untagged_images(
             stats["failed"] += 1
 
     print(
-        f"Deleted {stats['deleted']}/{stats['total']} untagged images in {feed}/{repo}"
+        f"Deleted {stats['deleted']}/{stats['total']} images in {feed}/{repo}"
     )
     if stats["failed"] > 0:
         print(f"Failed to delete {stats['failed']} images")

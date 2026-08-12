@@ -6,13 +6,14 @@ from core.proget import (
     login_to_proget,
     get_repositories,
     get_images,
-    delete_untagged_images,
+    delete_images,
+    identify_images_to_delete,
 )
 
 
 async def main():
     parser = argparse.ArgumentParser(
-        description="Clean up untagged Docker images from ProGet registry"
+        description="Clean up Docker images from a ProGet registry by untagged and/or tag-prefix criteria"
     )
     parser.add_argument(
         "-s", "--host", required=True, help="ProGet host URL (e.g., https://proget.mysite.com)"
@@ -24,6 +25,17 @@ async def main():
     )
     parser.add_argument("-r",
         "--repo", help="Optional: specific repository to clean (default: all repositories)"
+    )
+    parser.add_argument(
+        "-iu",
+        "--include-untagged",
+        action="store_true",
+        help="Include untagged images in cleanup (default: False)",
+    )
+    parser.add_argument(
+        "-ip",
+        "--include-prefix",
+        help="Include images with any tag matching a comma-separated list of prefixes (e.g. 'mr-,test')",
     )
     parser.add_argument("-dr",
         "--dry-run", action="store_true", help="Run without making actual deletions"
@@ -42,6 +54,18 @@ async def main():
     )
 
     args = parser.parse_args()
+
+    # Parse comma-separated tag prefixes into a list
+    tag_prefixes = (
+        [p.strip() for p in args.include_prefix.split(",") if p.strip()]
+        if args.include_prefix
+        else []
+    )
+
+    if not args.include_untagged and not tag_prefixes:
+        parser.error(
+            "At least one of --include-untagged or --include-prefix must be specified"
+        )
 
     # Start timing
     start_time = time.time()
@@ -88,6 +112,8 @@ async def main():
             "repos_processed": 0,
             "total_images": 0,
             "untagged_images": 0,
+            "prefix_matched_images": 0,
+            "images_to_delete": 0,
             "deleted_images": 0,
             "failed_deletes": 0,
         }
@@ -109,35 +135,49 @@ async def main():
 
             total_stats["total_images"] += len(images)
 
-            # Count untagged images
-            untagged_count = sum(1 for img in images if img.is_untagged)
+            # Identify images matching the selected cleanup criteria
+            to_delete = identify_images_to_delete(
+                images, tag_prefixes=tag_prefixes, include_untagged=args.include_untagged
+            )
+            untagged_count = (
+                len([img for img in to_delete if img.is_untagged])
+                if args.include_untagged else 0
+            )
+            prefix_matched_count = (
+                len([img for img in to_delete if img.matches_tag_prefix(tag_prefixes)])
+                if tag_prefixes
+                else 0
+            )
             total_stats["untagged_images"] += untagged_count
+            total_stats["prefix_matched_images"] += prefix_matched_count
+            total_stats["images_to_delete"] += len(to_delete)
 
-            print(f"Found {len(images)} total images ({untagged_count} untagged)")
+            print(f"Found {len(images)} total images ({len(to_delete)} to delete)")
 
-            if untagged_count == 0:
-                print(f"No untagged images in {repo.full_name} - skipping")
+            if not to_delete:
+                print(f"No images to delete in {repo.full_name} - skipping")
                 total_stats["repos_processed"] += 1
                 continue
 
             # Confirmation prompt (unless --yes flag is set or dry-run)
             if not args.yes and not args.dry_run:
                 response = input(
-                    f"\nDelete {untagged_count} untagged images in {repo.full_name}? [y/N]: "
+                    f"\nDelete {len(to_delete)} images in {repo.full_name}? [y/N]: "
                 )
                 if response.lower() != "y":
                     print("Skipped by user")
                     continue
 
-            # Phase 4: Image Deletion (directly delete untagged images)
-            print(f"\n[Phase 4/4] Deleting {untagged_count} untagged images...")
-            delete_stats = await delete_untagged_images(
+            # Phase 4: Image Deletion
+            print(f"\n[Phase 4/4] Deleting {len(to_delete)} images...")
+            delete_stats = await delete_images(
                 page=page,
                 host=args.host,
                 feed=repo.feed,
                 repo=repo.name,
                 images=images,
                 dry_run=args.dry_run,
+                images_to_delete=to_delete,
             )
 
             total_stats["deleted_images"] += delete_stats["deleted"]
@@ -150,7 +190,11 @@ async def main():
         print("=" * 80)
         print(f"Repositories processed:   {total_stats['repos_processed']}/{len(repositories)}")
         print(f"Total images scanned:     {total_stats['total_images']}")
-        print(f"Untagged images found:    {total_stats['untagged_images']}")
+        if args.include_untagged:
+            print(f"Untagged images found:    {total_stats['untagged_images']}")
+        if tag_prefixes:
+            print(f"Prefix-matched images:    {total_stats['prefix_matched_images']}")
+        print(f"Images to delete:         {total_stats['images_to_delete']}")
         print(f"Images deleted:           {total_stats['deleted_images']}")
         if total_stats["failed_deletes"] > 0:
             print(f"Failed to delete:         {total_stats['failed_deletes']}")

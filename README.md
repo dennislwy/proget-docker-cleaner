@@ -1,14 +1,15 @@
 # ProGet Docker Images Cleaner
 
-A Python CLI tool that automatically cleans up untagged Docker images from a ProGet container registry.
+A Python CLI tool that automatically cleans up Docker images from a ProGet container registry —
+untagged images, images with tags matching a prefix list (e.g. `mr-`, `test-`), or both.
 Useful for reducing storage usage and keeping your container repository tidy.
 
 This tool:
 1. Logs into a self-hosted ProGet instance
 2. Retrieves all repository names
 3. Fetches all images (tagged + untagged) for each repository
-4. Identifies untagged images
-5. Creates temporary tags for untagged images to obtain their full SHA256 digests
+4. Identifies images matching your chosen criteria (untagged and/or tag-prefix)
+5. Creates temporary tags for matched images to obtain their full SHA256 digests
 6. Deletes images using Docker Registry V2 API with full digests
 7. Repeats the process for each repository or a specific repo
 
@@ -17,9 +18,9 @@ Supports **dry-run**, **single-repo**, **auto-confirmation**, and authenticated 
 ## Features
 - 🔐 Authenticates using ProGet username + password
 - 📦 Retrieves all repositories automatically
-- 🔍 Identifies untagged images (94.1% of images in typical ProGet installations!)
+- 🔍 Identifies untagged images and/or images with tags matching a prefix list (untagged images made up 94.1% of images in one typical ProGet installation!)
 - 🏷️ Smart tagging approach to obtain full SHA256 digests from short digests
-- 🗑️ Deletes untagged images using Docker Registry V2 API
+- 🗑️ Deletes untagged images (`-iu`/`--include-untagged`) and/or images with tags matching a prefix list (`-ip`/`--include-prefix`) using Docker Registry V2 API
 - 🧪 Dry-run mode for safe simulation
 - ✅ Auto-confirmation mode (`-y`/`--yes`) for automated scripts
 - 🧭 Optional repo filtering (`--repo`)
@@ -79,13 +80,13 @@ proget-docker-cleaner/
 **Phase 3: Image Enumeration**
 - ✅ Fetch all images for a repository
 - ✅ Parse image data (digest, tags, published date, downloads)
-- ✅ Identify untagged images
-- ✅ DockerImage dataclass with `is_untagged` property
-- ✅ Test coverage: 18 tests (14 unit + 4 integration)
+- ✅ Identify untagged images and images with tags matching a prefix list
+- ✅ DockerImage dataclass with `is_untagged` property and `matches_tag_prefix()` method
+- ✅ Test coverage: unit tests in `tests/unit/test_image.py` + 4 integration tests
 
 **Phase 4: Image Deletion Operations**
 - ✅ Delete individual images using Docker Registry V2 API
-- ✅ Batch deletion of untagged images
+- ✅ Batch deletion of images matching the selected criteria (`--include-untagged`/`--include-prefix`)
 - ✅ Tag-then-delete approach: temporary tagging via Playwright form automation
 - ✅ Extract full SHA256 digest from tag manifests
 - ✅ DELETE manifest by full digest using Docker Registry V2 API
@@ -94,7 +95,7 @@ proget-docker-cleaner/
 - ✅ Error handling and detailed logging
 - ✅ Production-tested: Successfully deleted 142/142 images in 3min 35sec
 
-**Total Test Coverage**: 62 tests, 100% code coverage
+**Total Test Coverage**: 87 tests across unit and integration suites
 
 ### 📋 Planned Phases
 
@@ -127,12 +128,13 @@ uv run playwright install chromium
 
 ## Usage
 
-### Basic usage
+### Basic usage (clean untagged images)
 ```bash
 python proget-docker-cleaner.py \
   --host https://proget.mysite.com \
   --username admin \
-  --password yourpassword
+  --password yourpassword \
+  --include-untagged
 ```
 
 ### Clean only a specific repository
@@ -141,7 +143,8 @@ python proget-docker-cleaner.py \
   --host https://proget.mysite.com \
   --username admin \
   --password pw123 \
-  --repo payment-service
+  --repo payment-service \
+  --include-untagged
 ```
 
 ### 🧪 Dry run (no deletions, only print actions)
@@ -150,6 +153,7 @@ python proget-docker-cleaner.py \
   --host https://proget.mysite.com \
   --username admin \
   --password pw123 \
+  --include-untagged \
   --dry-run
 ```
 
@@ -159,6 +163,7 @@ python proget-docker-cleaner.py \
   --host https://proget.mysite.com \
   --username admin \
   --password pw123 \
+  --include-untagged \
   --yes
 
 # Or use short form
@@ -166,7 +171,25 @@ python proget-docker-cleaner.py \
   --host https://proget.mysite.com \
   --username admin \
   --password pw123 \
+  --include-untagged \
   -y
+```
+
+### 🏷️ Clean images by tag prefix (e.g. merge-request or test builds)
+```bash
+python proget-docker-cleaner.py \
+  --host https://proget.mysite.com \
+  --username admin \
+  --password pw123 \
+  --include-prefix "mr-,test"
+
+# Combine with untagged cleanup
+python proget-docker-cleaner.py \
+  --host https://proget.mysite.com \
+  --username admin \
+  --password pw123 \
+  --include-untagged \
+  --include-prefix "mr-,test"
 ```
 
 ### 📊 Analyze all repositories
@@ -182,17 +205,21 @@ This will scan all repositories and generate a report showing:
 
 ## Command Line Arguments
 
-| Flag                | Short | Required | Description                                              |
-| ------------------- | ----- | -------- | -------------------------------------------------------- |
-| `--host <url>`      | `-s`  | Yes      | Base ProGet URL, e.g. `https://proget.mysite.com`        |
-| `--username <user>` | `-u`  | Yes      | ProGet username                                          |
-| `--password <pass>` | `-p`  | Yes      | ProGet password                                          |
-| `--feed <name>`     | `-f`  | No       | Container feed name (default: docker)                    |
-| `--dry-run`         | `-dr` | No       | Simulate actions without deletion                        |
-| `--yes`             | `-y`  | No       | Auto-confirm deletion without prompting (default: False) |
-| `--repo <name>`     | `-r`  | No       | Only clean one specific repository                       |
-| `--debug`           | `-d`  | No       | Show browser window for debugging (default: headless)    |
-| `--concurrency <n>` | `-c`  | No       | Clean multiple repos concurrently (default: 1)           |
+| Flag                      | Short | Required | Description                                                         |
+| ------------------------- | ----- | -------- | ------------------------------------------------------------------- |
+| `--host <url>`            | `-s`  | Yes      | Base ProGet URL, e.g. `https://proget.mysite.com`                   |
+| `--username <user>`       | `-u`  | Yes      | ProGet username                                                     |
+| `--password <pass>`       | `-p`  | Yes      | ProGet password                                                     |
+| `--feed <name>`           | `-f`  | No       | Container feed name (default: docker)                               |
+| `--dry-run`               | `-dr` | No       | Simulate actions without deletion                                   |
+| `--yes`                   | `-y`  | No       | Auto-confirm deletion without prompting (default: False)            |
+| `--repo <name>`           | `-r`  | No       | Only clean one specific repository                                  |
+| `--include-untagged`      | `-iu` | No\*     | Include untagged images in cleanup (default: False)                 |
+| `--include-prefix <list>` | `-ip` | No\*     | Comma-separated tag prefixes to include in cleanup, e.g. `mr-,test` |
+| `--debug`                 | `-d`  | No       | Show browser window for debugging (default: headless)               |
+| `--concurrency <n>`       | `-c`  | No       | Clean multiple repos concurrently (default: 1)                      |
+
+\* At least one of `--include-untagged` or `--include-prefix` must be specified, or the tool exits with an error.
 
 ## Testing
 
@@ -255,10 +282,10 @@ Estimated Storage to Reclaim: 125 GB - 625 GB
 
 The tool uses Playwright to interact with ProGet's web interface and Docker Registry V2 API for image operations. Key components:
 
-1. **Authentication Module** (`core/proget.py:13-62`): Handles login and session management
-2. **Repository Discovery** (`core/proget.py:84-152`): Fetches and parses repository list
-3. **Image Enumeration** (`core/proget.py:185-289`): Identifies tagged and untagged images
-4. **Image Deletion** (`core/proget.py:292-590`): Tag-then-delete approach for untagged images
+1. **Authentication Module** (`core/proget.py`): Handles login and session management
+2. **Repository Discovery** (`core/proget.py`): Fetches and parses repository list
+3. **Image Enumeration** (`core/proget.py`): Identifies tagged and untagged images
+4. **Image Deletion** (`core/proget.py`): Tag-then-delete approach for untagged images
    - Creates temporary tags via Playwright form automation
    - Queries Docker Registry V2 API for full SHA256 digests
    - Deletes images by full digest
@@ -284,7 +311,7 @@ The deletion process works around ProGet's limitation of only exposing short 12-
 - ⚠️ Review the list of images to be deleted
 - ⚠️ Use `--yes` flag carefully - it skips confirmation prompts
 - ⚠️ Avoid using high concurrency if your ProGet server is small
-- ⚠️ The tool only targets untagged images - tagged images are safe
+- ⚠️ The tool only deletes images matching the criteria you specify via `--include-untagged`/`--include-prefix` - all other images are safe
 - ⚠️ Images with `delete-` prefix tags are considered untagged and to be deleted
 
 ### Running in Development
@@ -295,6 +322,7 @@ python proget-docker-cleaner.py \
   --host https://proget.mysite.com \
   --username test \
   --password test123 \
+  --include-untagged \
   --dry-run
 ```
 

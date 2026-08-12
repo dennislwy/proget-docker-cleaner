@@ -1,8 +1,12 @@
 """Unit tests for CLI argument parsing."""
 
 import argparse
+import subprocess
 import sys
 from io import StringIO
+from pathlib import Path
+
+import pytest
 
 
 def test_yes_flag_short_form():
@@ -129,3 +133,120 @@ def test_yes_flag_help_text():
     assert "-y" in help_text
     assert "--yes" in help_text
     assert "Automatically confirm deletion" in help_text
+
+
+def _build_parser():
+    """Build a parser matching proget-docker-cleaner.py's cleanup-criteria flags."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--host", required=True)
+    parser.add_argument("--username", required=True)
+    parser.add_argument("--password", required=True)
+    parser.add_argument(
+        "-iu",
+        "--include-untagged",
+        action="store_true",
+        help="Include untagged images in cleanup (default: False)",
+    )
+    parser.add_argument(
+        "-ip",
+        "--include-prefix",
+        help="Include images with any tag matching a comma-separated list of prefixes (e.g. 'mr-,test')",
+    )
+    return parser
+
+
+def test_include_untagged_flag_short_form():
+    """Test that -iu flag is parsed correctly."""
+    parser = _build_parser()
+
+    args = parser.parse_args([
+        "--host", "https://proget.example.com",
+        "--username", "user",
+        "--password", "pass",
+        "-iu",
+    ])
+
+    assert args.include_untagged == True
+
+
+def test_include_untagged_flag_defaults_to_false():
+    """Test that include_untagged defaults to False when not provided."""
+    parser = _build_parser()
+
+    args = parser.parse_args([
+        "--host", "https://proget.example.com",
+        "--username", "user",
+        "--password", "pass",
+    ])
+
+    assert args.include_untagged == False
+
+
+def test_include_prefix_flag_short_form():
+    """Test that -ip flag is parsed correctly."""
+    parser = _build_parser()
+
+    args = parser.parse_args([
+        "--host", "https://proget.example.com",
+        "--username", "user",
+        "--password", "pass",
+        "-ip", "mr-,test",
+    ])
+
+    assert args.include_prefix == "mr-,test"
+
+
+def test_include_prefix_flag_defaults_to_none():
+    """Test that include_prefix defaults to None when not provided."""
+    parser = _build_parser()
+
+    args = parser.parse_args([
+        "--host", "https://proget.example.com",
+        "--username", "user",
+        "--password", "pass",
+    ])
+
+    assert args.include_prefix is None
+
+
+def test_neither_criteria_flag_raises_parser_error():
+    """Test that validation (parser.error) exits with status 2 when neither criteria is given."""
+    parser = _build_parser()
+    args = parser.parse_args([
+        "--host", "https://proget.example.com",
+        "--username", "user",
+        "--password", "pass",
+    ])
+
+    tag_prefixes = (
+        [p.strip() for p in args.include_prefix.split(",") if p.strip()]
+        if args.include_prefix
+        else []
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        if not args.include_untagged and not tag_prefixes:
+            parser.error(
+                "At least one of --include-untagged or --include-prefix must be specified"
+            )
+
+    assert exc_info.value.code == 2
+
+
+def test_cli_exits_with_error_when_no_criteria_given():
+    """Test that the real script fails fast when neither -iu nor -ip is given."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "proget-docker-cleaner.py",
+            "--host", "https://x",
+            "--username", "u",
+            "--password", "p",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=Path(__file__).resolve().parents[2],
+    )
+
+    assert result.returncode == 2
+    assert "At least one of --include-untagged or --include-prefix must be specified" in result.stderr
