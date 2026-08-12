@@ -273,6 +273,9 @@ async def test_delete_images_no_untagged():
 async def test_delete_images_dry_run():
     """Test delete_images in dry-run mode."""
     page = MagicMock()
+    page.goto = AsyncMock()
+    page.wait_for_load_state = AsyncMock()
+    page.content = AsyncMock(return_value="<html>repositoryId=123</html>")
 
     images = [
         DockerImage(digest="abc123", tags=[], published_date="2024-01-01", downloads="10"),
@@ -302,13 +305,16 @@ async def test_delete_images_success():
     page.context.cookies = AsyncMock(
         return_value=[{"name": "session", "value": "test123"}]
     )
+    page.goto = AsyncMock()
+    page.wait_for_load_state = AsyncMock()
+    page.content = AsyncMock(return_value="<html>repositoryId=123</html>")
 
     images = [
         DockerImage(digest="abc123", tags=["delete-1"], published_date="2024-01-01", downloads="10"),
         DockerImage(digest="def456", tags=[], published_date="2024-01-02", downloads="5"),
     ]
 
-    with patch("core.proget.delete_image", new=AsyncMock(return_value=True)):
+    with patch("core.proget.delete_image_optimized", new=AsyncMock(return_value=True)):
         stats = await delete_images(
             page=page,
             host="https://proget.test.com",
@@ -331,6 +337,9 @@ async def test_delete_images_partial_failure():
     page.context.cookies = AsyncMock(
         return_value=[{"name": "session", "value": "test123"}]
     )
+    page.goto = AsyncMock()
+    page.wait_for_load_state = AsyncMock()
+    page.content = AsyncMock(return_value="<html>repositoryId=123</html>")
 
     images = [
         DockerImage(digest="abc123", tags=["delete-1"], published_date="2024-01-01", downloads="10"),
@@ -338,7 +347,7 @@ async def test_delete_images_partial_failure():
         DockerImage(digest="ghi789", tags=[], published_date="2024-01-03", downloads="7"),
     ]
 
-    with patch("core.proget.delete_image", new=AsyncMock(side_effect=[True, False, True])):
+    with patch("core.proget.delete_image_optimized", new=AsyncMock(side_effect=[True, False, True])):
         stats = await delete_images(
             page=page,
             host="https://proget.test.com",
@@ -358,6 +367,9 @@ async def test_delete_images_partial_failure():
 async def test_delete_images_only_deletes_untagged_when_that_criteria_set():
     """Test that delete_images with include_untagged=True only deletes untagged images."""
     page = MagicMock()
+    page.goto = AsyncMock()
+    page.wait_for_load_state = AsyncMock()
+    page.content = AsyncMock(return_value="<html>repositoryId=123</html>")
 
     images = [
         DockerImage(digest="abc123", tags=["delete-1"], published_date="2024-01-01", downloads="10"),
@@ -386,6 +398,9 @@ async def test_delete_images_only_deletes_untagged_when_that_criteria_set():
 async def test_delete_images_with_multiple_delete_tags():
     """Test deleting images with multiple delete- prefix tags."""
     page = MagicMock()
+    page.goto = AsyncMock()
+    page.wait_for_load_state = AsyncMock()
+    page.content = AsyncMock(return_value="<html>repositoryId=123</html>")
 
     images = [
         DockerImage(digest="abc123", tags=["delete-1", "delete-2"], published_date="2024-01-01", downloads="10"),
@@ -435,6 +450,9 @@ async def test_delete_images_default_excludes_untagged():
 async def test_delete_images_with_tag_prefixes_only():
     """Test delete_images selects only prefix-matched images when include_untagged=False."""
     page = MagicMock()
+    page.goto = AsyncMock()
+    page.wait_for_load_state = AsyncMock()
+    page.content = AsyncMock(return_value="<html>repositoryId=123</html>")
 
     images = [
         DockerImage(digest="abc123", tags=[], published_date="2024-01-01", downloads="10"),
