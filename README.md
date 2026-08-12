@@ -162,6 +162,7 @@ python proget-docker-cleaner.py \
   --host https://proget.mysite.com \
   --username admin \
   --password pw123 \
+  --include-untagged \
   --yes
 
 # Or use short form
@@ -169,6 +170,7 @@ python proget-docker-cleaner.py \
   --host https://proget.mysite.com \
   --username admin \
   --password pw123 \
+  --include-untagged \
   -y
 ```
 
@@ -319,6 +321,7 @@ python proget-docker-cleaner.py \
   --host https://proget.mysite.com \
   --username test \
   --password test123 \
+  --include-untagged \
   --dry-run
 ```
 

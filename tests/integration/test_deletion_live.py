@@ -10,7 +10,7 @@ from core.proget import (
     get_repositories,
     get_images,
     delete_image,
-    delete_untagged_images,
+    delete_images,
 )
 
 
@@ -76,7 +76,7 @@ async def test_delete_image_dry_run(proget_test_credentials):
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_delete_untagged_images_dry_run(proget_test_credentials):
+async def test_delete_images_dry_run(proget_test_credentials):
     """Test deleting all untagged images in dry-run mode on live ProGet.
 
     Args:
@@ -109,13 +109,14 @@ async def test_delete_untagged_images_dry_run(proget_test_credentials):
     )
 
     # Delete all untagged images in dry-run mode
-    stats = await delete_untagged_images(
+    stats = await delete_images(
         page=page,
         host=proget_test_credentials["host"],
         feed=repo.feed,
         repo=repo.name,
         images=images,
         dry_run=True,
+        include_untagged=True,
     )
 
     # Verify statistics

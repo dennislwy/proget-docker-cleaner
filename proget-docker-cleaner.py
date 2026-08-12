@@ -15,7 +15,7 @@ from core.proget import (
 
 async def main():
     parser = argparse.ArgumentParser(
-        description="Clean up untagged Docker images from ProGet registry"
+        description="Clean up Docker images from a ProGet registry by untagged and/or tag-prefix criteria"
     )
     parser.add_argument(
         "-s", "--host", required=True, help="ProGet host URL (e.g., https://proget.mysite.com)"

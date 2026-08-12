@@ -1,8 +1,10 @@
 """Unit tests for CLI argument parsing."""
 
 import argparse
+import subprocess
 import sys
 from io import StringIO
+from pathlib import Path
 
 import pytest
 
@@ -229,3 +231,22 @@ def test_neither_criteria_flag_raises_parser_error():
             )
 
     assert exc_info.value.code == 2
+
+
+def test_cli_exits_with_error_when_no_criteria_given():
+    """Test that the real script fails fast when neither -iu nor -ip is given."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "proget-docker-cleaner.py",
+            "--host", "https://x",
+            "--username", "u",
+            "--password", "p",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=Path(__file__).resolve().parents[2],
+    )
+
+    assert result.returncode == 2
+    assert "At least one of --include-untagged or --include-prefix must be specified" in result.stderr
