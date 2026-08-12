@@ -6,6 +6,7 @@ from core.proget import (
     parse_images_html,
     identify_untagged_images,
     identify_prefix_matched_images,
+    identify_images_to_delete,
 )
 
 
@@ -391,3 +392,69 @@ def test_identify_prefix_matched_images_no_matches():
     ]
 
     assert identify_prefix_matched_images(images, ["mr-"]) == []
+
+
+def test_identify_images_to_delete_neither_criteria():
+    """Test that no criteria selected returns an empty list."""
+    images = [
+        DockerImage(digest="a1", tags=[], published_date="d", downloads="0"),
+        DockerImage(digest="a2", tags=["mr-1"], published_date="d", downloads="0"),
+    ]
+
+    result = identify_images_to_delete(images)
+
+    assert result == []
+
+
+def test_identify_images_to_delete_untagged_only():
+    """Test that only untagged images are selected when include_untagged=True and no prefixes."""
+    images = [
+        DockerImage(digest="a1", tags=[], published_date="d", downloads="0"),
+        DockerImage(digest="a2", tags=["mr-1"], published_date="d", downloads="0"),
+        DockerImage(digest="a3", tags=["latest"], published_date="d", downloads="0"),
+    ]
+
+    result = identify_images_to_delete(images, include_untagged=True)
+
+    assert [img.digest for img in result] == ["a1"]
+
+
+def test_identify_images_to_delete_prefix_only():
+    """Test that only prefix-matched images are selected when tag_prefixes given and include_untagged=False."""
+    images = [
+        DockerImage(digest="a1", tags=[], published_date="d", downloads="0"),
+        DockerImage(digest="a2", tags=["mr-1"], published_date="d", downloads="0"),
+        DockerImage(digest="a3", tags=["latest"], published_date="d", downloads="0"),
+    ]
+
+    result = identify_images_to_delete(images, tag_prefixes=["mr-"])
+
+    assert [img.digest for img in result] == ["a2"]
+
+
+def test_identify_images_to_delete_both_criteria_union_untagged_first():
+    """Test that both criteria combine as a union, with untagged images first."""
+    images = [
+        DockerImage(digest="a1", tags=[], published_date="d", downloads="0"),
+        DockerImage(digest="a2", tags=["mr-1"], published_date="d", downloads="0"),
+        DockerImage(digest="a3", tags=["latest"], published_date="d", downloads="0"),
+        DockerImage(digest="a4", tags=["delete-1"], published_date="d", downloads="0"),
+    ]
+
+    result = identify_images_to_delete(images, tag_prefixes=["mr-"], include_untagged=True)
+
+    assert [img.digest for img in result] == ["a1", "a4", "a2"]
+
+
+def test_identify_images_to_delete_dedupes_by_digest():
+    """Test that an image matching both criteria appears only once."""
+    # An untagged image (empty tags) can never also match a prefix, so build the
+    # overlap case using a delete- tag that also happens to match the prefix list.
+    images = [
+        DockerImage(digest="a1", tags=["delete-1"], published_date="d", downloads="0"),
+    ]
+
+    result = identify_images_to_delete(images, tag_prefixes=["delete-"], include_untagged=True)
+
+    assert [img.digest for img in result] == ["a1"]
+    assert len(result) == 1

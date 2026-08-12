@@ -317,6 +317,40 @@ def identify_prefix_matched_images(
     return [img for img in images if img.matches_tag_prefix(prefixes)]
 
 
+def identify_images_to_delete(
+    images: list[DockerImage],
+    tag_prefixes: list[str] | None = None,
+    include_untagged: bool = False,
+) -> list[DockerImage]:
+    """Identify images to delete based on the selected cleanup criteria.
+
+    Args:
+        images: List of all images
+        tag_prefixes: Optional list of tag prefixes; images with a matching tag are included
+        include_untagged: If True, untagged images are included
+
+    Returns:
+        List of images to delete, deduplicated by digest (untagged images first,
+        then prefix-matched images not already included)
+    """
+    to_delete: list[DockerImage] = []
+    seen_digests: set[str] = set()
+
+    if include_untagged:
+        for img in identify_untagged_images(images):
+            if img.digest not in seen_digests:
+                to_delete.append(img)
+                seen_digests.add(img.digest)
+
+    if tag_prefixes:
+        for img in identify_prefix_matched_images(images, tag_prefixes):
+            if img.digest not in seen_digests:
+                to_delete.append(img)
+                seen_digests.add(img.digest)
+
+    return to_delete
+
+
 async def delete_image(
     page: Page,
     host: str,
