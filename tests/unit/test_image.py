@@ -68,6 +68,90 @@ def test_docker_image_is_untagged_mixed_tags():
     assert img.is_untagged == False
 
 
+def test_matches_tag_prefix_single_match():
+    """Test that an image with a tag matching a single prefix returns True."""
+    img = DockerImage(
+        digest="a3b8c21afe97",
+        tags=["mr-123"],
+        published_date="06/07/2024 10:13:35",
+        downloads="0",
+    )
+
+    assert img.matches_tag_prefix(["mr-"]) == True
+
+
+def test_matches_tag_prefix_matches_any_of_multiple_prefixes():
+    """Test that a tag matching any one of several prefixes returns True."""
+    img = DockerImage(
+        digest="a3b8c21afe97",
+        tags=["test-build-1"],
+        published_date="06/07/2024 10:13:35",
+        downloads="0",
+    )
+
+    assert img.matches_tag_prefix(["mr-", "test-"]) == True
+
+
+def test_matches_tag_prefix_any_tag_matches():
+    """Test that only one of several tags needs to match a prefix."""
+    img = DockerImage(
+        digest="a3b8c21afe97",
+        tags=["mr-123", "latest"],
+        published_date="06/07/2024 10:13:35",
+        downloads="0",
+    )
+
+    assert img.matches_tag_prefix(["mr-"]) == True
+
+
+def test_matches_tag_prefix_no_match():
+    """Test that an image with no tag matching any prefix returns False."""
+    img = DockerImage(
+        digest="a3b8c21afe97",
+        tags=["latest", "v1.0"],
+        published_date="06/07/2024 10:13:35",
+        downloads="0",
+    )
+
+    assert img.matches_tag_prefix(["mr-", "test-"]) == False
+
+
+def test_matches_tag_prefix_empty_tags():
+    """Test that an image with no tags never matches a prefix."""
+    img = DockerImage(
+        digest="a3b8c21afe97",
+        tags=[],
+        published_date="06/07/2024 10:13:35",
+        downloads="0",
+    )
+
+    assert img.matches_tag_prefix(["mr-"]) == False
+
+
+def test_matches_tag_prefix_empty_prefix_list():
+    """Test that an empty prefix list never matches."""
+    img = DockerImage(
+        digest="a3b8c21afe97",
+        tags=["mr-123"],
+        published_date="06/07/2024 10:13:35",
+        downloads="0",
+    )
+
+    assert img.matches_tag_prefix([]) == False
+
+
+def test_matches_tag_prefix_case_sensitive():
+    """Test that prefix matching is case-sensitive."""
+    img = DockerImage(
+        digest="a3b8c21afe97",
+        tags=["MR-123"],
+        published_date="06/07/2024 10:13:35",
+        downloads="0",
+    )
+
+    assert img.matches_tag_prefix(["mr-"]) == False
+
+
 def test_parse_images_html_with_untagged_image():
     """Test parsing HTML with untagged image."""
     html_content = """

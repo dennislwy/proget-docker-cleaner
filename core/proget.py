@@ -183,6 +183,17 @@ class DockerImage:
         """
         return len(self.tags) == 0 or all(t.startswith("delete-") for t in self.tags)
 
+    def matches_tag_prefix(self, prefixes: list[str]) -> bool:
+        """Check if any tag starts with any of the given prefixes.
+
+        Args:
+            prefixes: List of tag prefixes to match against
+
+        Returns:
+            True if at least one tag starts with at least one prefix, False otherwise
+        """
+        return any(tag.startswith(prefix) for tag in self.tags for prefix in prefixes)
+
 
 async def get_images(
     page: Page, host: str, feed: str, repo: str
