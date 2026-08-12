@@ -19,7 +19,7 @@ Supports **dry-run**, **single-repo**, **auto-confirmation**, and authenticated 
 - 📦 Retrieves all repositories automatically
 - 🔍 Identifies untagged images (94.1% of images in typical ProGet installations!)
 - 🏷️ Smart tagging approach to obtain full SHA256 digests from short digests
-- 🗑️ Deletes untagged images using Docker Registry V2 API
+- 🗑️ Deletes untagged images (`-iu`/`--include-untagged`) and/or images with tags matching a prefix list (`-ip`/`--include-prefix`) using Docker Registry V2 API
 - 🧪 Dry-run mode for safe simulation
 - ✅ Auto-confirmation mode (`-y`/`--yes`) for automated scripts
 - 🧭 Optional repo filtering (`--repo`)
@@ -127,12 +127,13 @@ uv run playwright install chromium
 
 ## Usage
 
-### Basic usage
+### Basic usage (clean untagged images)
 ```bash
 python proget-docker-cleaner.py \
   --host https://proget.mysite.com \
   --username admin \
-  --password yourpassword
+  --password yourpassword \
+  --include-untagged
 ```
 
 ### Clean only a specific repository
@@ -141,7 +142,8 @@ python proget-docker-cleaner.py \
   --host https://proget.mysite.com \
   --username admin \
   --password pw123 \
-  --repo payment-service
+  --repo payment-service \
+  --include-untagged
 ```
 
 ### 🧪 Dry run (no deletions, only print actions)
@@ -150,6 +152,7 @@ python proget-docker-cleaner.py \
   --host https://proget.mysite.com \
   --username admin \
   --password pw123 \
+  --include-untagged \
   --dry-run
 ```
 
@@ -167,6 +170,23 @@ python proget-docker-cleaner.py \
   --username admin \
   --password pw123 \
   -y
+```
+
+### 🏷️ Clean images by tag prefix (e.g. merge-request or test builds)
+```bash
+python proget-docker-cleaner.py \
+  --host https://proget.mysite.com \
+  --username admin \
+  --password pw123 \
+  --include-prefix "mr-,test"
+
+# Combine with untagged cleanup
+python proget-docker-cleaner.py \
+  --host https://proget.mysite.com \
+  --username admin \
+  --password pw123 \
+  --include-untagged \
+  --include-prefix "mr-,test"
 ```
 
 ### 📊 Analyze all repositories
@@ -191,8 +211,12 @@ This will scan all repositories and generate a report showing:
 | `--dry-run`         | `-dr` | No       | Simulate actions without deletion                        |
 | `--yes`             | `-y`  | No       | Auto-confirm deletion without prompting (default: False) |
 | `--repo <name>`     | `-r`  | No       | Only clean one specific repository                       |
+| `--include-untagged`| `-iu` | No\*     | Include untagged images in cleanup (default: False)      |
+| `--include-prefix <list>` | `-ip` | No\* | Comma-separated tag prefixes to include in cleanup, e.g. `mr-,test` |
 | `--debug`           | `-d`  | No       | Show browser window for debugging (default: headless)    |
 | `--concurrency <n>` | `-c`  | No       | Clean multiple repos concurrently (default: 1)           |
+
+\* At least one of `--include-untagged` or `--include-prefix` must be specified, or the tool exits with an error.
 
 ## Testing
 
@@ -284,7 +308,7 @@ The deletion process works around ProGet's limitation of only exposing short 12-
 - ⚠️ Review the list of images to be deleted
 - ⚠️ Use `--yes` flag carefully - it skips confirmation prompts
 - ⚠️ Avoid using high concurrency if your ProGet server is small
-- ⚠️ The tool only targets untagged images - tagged images are safe
+- ⚠️ The tool only deletes images matching the criteria you specify via `--include-untagged`/`--include-prefix` - all other images are safe
 - ⚠️ Images with `delete-` prefix tags are considered untagged and to be deleted
 
 ### Running in Development
