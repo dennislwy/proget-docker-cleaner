@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from core.proget import delete_image, delete_untagged_images, DockerImage
+from core.proget import delete_image, delete_images, DockerImage
 
 
 @pytest.mark.asyncio
@@ -245,8 +245,8 @@ async def test_delete_image_accepts_200_status():
 
 
 @pytest.mark.asyncio
-async def test_delete_untagged_images_no_untagged():
-    """Test delete_untagged_images with no untagged images."""
+async def test_delete_images_no_untagged():
+    """Test delete_images with no untagged images."""
     page = MagicMock()
 
     images = [
@@ -254,13 +254,14 @@ async def test_delete_untagged_images_no_untagged():
         DockerImage(digest="def456", tags=["v2.0"], published_date="2024-01-02", downloads="5"),
     ]
 
-    stats = await delete_untagged_images(
+    stats = await delete_images(
         page=page,
         host="https://proget.test.com",
         feed="docker",
         repo="test-repo",
         images=images,
         dry_run=False,
+        include_untagged=True,
     )
 
     assert stats["total"] == 0
@@ -269,8 +270,8 @@ async def test_delete_untagged_images_no_untagged():
 
 
 @pytest.mark.asyncio
-async def test_delete_untagged_images_dry_run():
-    """Test delete_untagged_images in dry-run mode."""
+async def test_delete_images_dry_run():
+    """Test delete_images in dry-run mode."""
     page = MagicMock()
 
     images = [
@@ -279,13 +280,14 @@ async def test_delete_untagged_images_dry_run():
         DockerImage(digest="ghi789", tags=["v1.0"], published_date="2024-01-03", downloads="15"),
     ]
 
-    stats = await delete_untagged_images(
+    stats = await delete_images(
         page=page,
         host="https://proget.test.com",
         feed="docker",
         repo="test-repo",
         images=images,
         dry_run=True,
+        include_untagged=True,
     )
 
     assert stats["total"] == 2
@@ -294,7 +296,7 @@ async def test_delete_untagged_images_dry_run():
 
 
 @pytest.mark.asyncio
-async def test_delete_untagged_images_success():
+async def test_delete_images_success():
     """Test successful deletion of untagged images."""
     page = MagicMock()
     page.context.cookies = AsyncMock(
@@ -307,13 +309,14 @@ async def test_delete_untagged_images_success():
     ]
 
     with patch("core.proget.delete_image", new=AsyncMock(return_value=True)):
-        stats = await delete_untagged_images(
+        stats = await delete_images(
             page=page,
             host="https://proget.test.com",
             feed="docker",
             repo="test-repo",
             images=images,
             dry_run=False,
+            include_untagged=True,
         )
 
     assert stats["total"] == 2
@@ -322,8 +325,8 @@ async def test_delete_untagged_images_success():
 
 
 @pytest.mark.asyncio
-async def test_delete_untagged_images_partial_failure():
-    """Test delete_untagged_images with some failures."""
+async def test_delete_images_partial_failure():
+    """Test delete_images with some failures."""
     page = MagicMock()
     page.context.cookies = AsyncMock(
         return_value=[{"name": "session", "value": "test123"}]
@@ -335,15 +338,15 @@ async def test_delete_untagged_images_partial_failure():
         DockerImage(digest="ghi789", tags=[], published_date="2024-01-03", downloads="7"),
     ]
 
-    # Mock delete_image to return True, False, True
     with patch("core.proget.delete_image", new=AsyncMock(side_effect=[True, False, True])):
-        stats = await delete_untagged_images(
+        stats = await delete_images(
             page=page,
             host="https://proget.test.com",
             feed="docker",
             repo="test-repo",
             images=images,
             dry_run=False,
+            include_untagged=True,
         )
 
     assert stats["total"] == 3
@@ -352,8 +355,8 @@ async def test_delete_untagged_images_partial_failure():
 
 
 @pytest.mark.asyncio
-async def test_delete_untagged_images_only_deletes_untagged():
-    """Test that delete_untagged_images only deletes untagged images."""
+async def test_delete_images_only_deletes_untagged_when_that_criteria_set():
+    """Test that delete_images with include_untagged=True only deletes untagged images."""
     page = MagicMock()
 
     images = [
@@ -363,13 +366,14 @@ async def test_delete_untagged_images_only_deletes_untagged():
         DockerImage(digest="jkl012", tags=["latest"], published_date="2024-01-04", downloads="20"),
     ]
 
-    stats = await delete_untagged_images(
+    stats = await delete_images(
         page=page,
         host="https://proget.test.com",
         feed="docker",
         repo="test-repo",
         images=images,
         dry_run=True,
+        include_untagged=True,
     )
 
     # Should only delete the first two images (delete-1 prefix and untagged)
@@ -379,7 +383,7 @@ async def test_delete_untagged_images_only_deletes_untagged():
 
 
 @pytest.mark.asyncio
-async def test_delete_untagged_images_with_multiple_delete_tags():
+async def test_delete_images_with_multiple_delete_tags():
     """Test deleting images with multiple delete- prefix tags."""
     page = MagicMock()
 
@@ -388,7 +392,32 @@ async def test_delete_untagged_images_with_multiple_delete_tags():
         DockerImage(digest="def456", tags=["delete-3"], published_date="2024-01-02", downloads="5"),
     ]
 
-    stats = await delete_untagged_images(
+    stats = await delete_images(
+        page=page,
+        host="https://proget.test.com",
+        feed="docker",
+        repo="test-repo",
+        images=images,
+        dry_run=True,
+        include_untagged=True,
+    )
+
+    assert stats["total"] == 2
+    assert stats["deleted"] == 2
+    assert stats["failed"] == 0
+
+
+@pytest.mark.asyncio
+async def test_delete_images_default_excludes_untagged():
+    """Test that delete_images with no criteria (defaults) selects nothing."""
+    page = MagicMock()
+
+    images = [
+        DockerImage(digest="abc123", tags=[], published_date="2024-01-01", downloads="10"),
+        DockerImage(digest="def456", tags=["delete-1"], published_date="2024-01-02", downloads="5"),
+    ]
+
+    stats = await delete_images(
         page=page,
         host="https://proget.test.com",
         feed="docker",
@@ -397,6 +426,32 @@ async def test_delete_untagged_images_with_multiple_delete_tags():
         dry_run=True,
     )
 
-    assert stats["total"] == 2
-    assert stats["deleted"] == 2
+    assert stats["total"] == 0
+    assert stats["deleted"] == 0
+    assert stats["failed"] == 0
+
+
+@pytest.mark.asyncio
+async def test_delete_images_with_tag_prefixes_only():
+    """Test delete_images selects only prefix-matched images when include_untagged=False."""
+    page = MagicMock()
+
+    images = [
+        DockerImage(digest="abc123", tags=[], published_date="2024-01-01", downloads="10"),
+        DockerImage(digest="def456", tags=["mr-42"], published_date="2024-01-02", downloads="5"),
+        DockerImage(digest="ghi789", tags=["latest"], published_date="2024-01-03", downloads="15"),
+    ]
+
+    stats = await delete_images(
+        page=page,
+        host="https://proget.test.com",
+        feed="docker",
+        repo="test-repo",
+        images=images,
+        dry_run=True,
+        tag_prefixes=["mr-"],
+    )
+
+    assert stats["total"] == 1
+    assert stats["deleted"] == 1
     assert stats["failed"] == 0
