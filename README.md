@@ -282,10 +282,10 @@ Estimated Storage to Reclaim: 125 GB - 625 GB
 
 The tool uses Playwright to interact with ProGet's web interface and Docker Registry V2 API for image operations. Key components:
 
-1. **Authentication Module** (`core/proget.py:13-62`): Handles login and session management
-2. **Repository Discovery** (`core/proget.py:84-152`): Fetches and parses repository list
-3. **Image Enumeration** (`core/proget.py:185-289`): Identifies tagged and untagged images
-4. **Image Deletion** (`core/proget.py:292-590`): Tag-then-delete approach for untagged images
+1. **Authentication Module** (`core/proget.py`): Handles login and session management
+2. **Repository Discovery** (`core/proget.py`): Fetches and parses repository list
+3. **Image Enumeration** (`core/proget.py`): Identifies tagged and untagged images
+4. **Image Deletion** (`core/proget.py`): Tag-then-delete approach for untagged images
    - Creates temporary tags via Playwright form automation
    - Queries Docker Registry V2 API for full SHA256 digests
    - Deletes images by full digest

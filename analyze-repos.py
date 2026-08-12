@@ -48,6 +48,7 @@ async def main():
     parser.add_argument(
         "-s",
         "--host",
+        required=True,
         help="ProGet host URL",
     )
     parser.add_argument(
